@@ -43,13 +43,11 @@ class CEffectInstance : public CGraphicObjectInstance
 
 		void SetEffectDataPointer(CEffectData * pEffectData);
 		
-#ifdef __ENABLE_STEALTH_FIX__ //EXP
 		// Returns the pointer to the effect data associated with this instance.
 		CEffectData* GetEffectDataPointer() const
 		{
 			return m_pkEftData;
 		}
-#endif
 
 		void Clear();
 		BOOL isAlive();

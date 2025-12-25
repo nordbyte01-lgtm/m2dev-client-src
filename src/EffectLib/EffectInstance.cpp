@@ -269,9 +269,7 @@ void CEffectInstance::Clear()
 
 void CEffectInstance::__Initialize()
 {
-#ifdef __ENABLE_STEALTH_FIX__
 	ReleaseAlwaysHidden();
-#endif
 	m_isAlive = FALSE;
 	m_dwFrame = 0;
 	m_pSoundInstanceVector = NULL;

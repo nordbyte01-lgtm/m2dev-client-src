@@ -351,7 +351,6 @@ void CEffectManager::HideEffect()
 	m_pSelectedEffectInstance->Hide();
 }
 
-#ifdef __ENABLE_STEALTH_FIX__
 void CEffectManager::ApplyAlwaysHidden()
 {
 	if (!m_pSelectedEffectInstance)
@@ -367,7 +366,6 @@ void CEffectManager::ReleaseAlwaysHidden()
 
 	m_pSelectedEffectInstance->ReleaseAlwaysHidden();
 }
-#endif
 
 bool CEffectManager::GetEffectData(DWORD dwID, CEffectData ** ppEffect)
 {
@@ -480,7 +478,6 @@ CEffectManager::~CEffectManager()
 	Destroy();
 }
 
-#ifdef __ENABLE_STEALTH_FIX__ //EXP
 DWORD CEffectManager::GetSelectedEffectDataCRC() const
 {
 	if (!m_pSelectedEffectInstance)
@@ -498,7 +495,6 @@ DWORD CEffectManager::GetSelectedEffectDataCRC() const
 	StringPath(cszFile, str);
 	return GetCaseCRC32(str.c_str(), (int)str.length());
 }
-#endif
 
 // just for map effect
 

@@ -57,10 +57,8 @@ class CEffectManager : public CScreen, public CSingleton<CEffectManager>
 		void ShowEffect();
 		void HideEffect();
 
-#ifdef __ENABLE_STEALTH_FIX__
 		void ApplyAlwaysHidden();
 		void ReleaseAlwaysHidden();
-#endif
 
 		// Temporary function
 		DWORD GetRandomEffect();
@@ -75,10 +73,8 @@ class CEffectManager : public CScreen, public CSingleton<CEffectManager>
 
 		int GetRenderingEffectCount();
 
-#ifdef __ENABLE_STEALTH_FIX__ //EXP
 		// Return the CRC of the effect-data for the selected effect instance.
 		DWORD GetSelectedEffectDataCRC() const;
-#endif
 
 	protected:
 		void __Initialize();

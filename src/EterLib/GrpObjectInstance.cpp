@@ -201,7 +201,6 @@ void CGraphicObjectInstance::Hide()
 	m_isVisible = false;
 }
 
-#ifdef __ENABLE_STEALTH_FIX__
 void CGraphicObjectInstance::ApplyAlwaysHidden() {
 	m_isAlwaysHidden = true;
 }
@@ -209,15 +208,10 @@ void CGraphicObjectInstance::ApplyAlwaysHidden() {
 void CGraphicObjectInstance::ReleaseAlwaysHidden() {
 	m_isAlwaysHidden = false;
 }
-#endif
 
 bool CGraphicObjectInstance::isShow()
 {
-#ifdef __ENABLE_STEALTH_FIX__
 	return m_isVisible && !m_isAlwaysHidden;
-#else
-	return m_isVisible;
-#endif
 }
 
 // 
@@ -292,9 +286,7 @@ void CGraphicObjectInstance::Initialize()
 
 	m_BlockCamera = false;
 
-#ifdef __ENABLE_STEALTH_FIX__
 	m_isAlwaysHidden = false;
-#endif
 
 	
 	m_v3Position.x = m_v3Position.y = m_v3Position.z = 0.0f;
