@@ -237,14 +237,12 @@ bool CGuildMarkDownloader::__LoginState_RecvPing()
 
 	TPacketCGPong kPacketPong;
 	kPacketPong.bHeader = HEADER_CG_PONG;
+	kPacketPong.bSequence = GetNextSequence();
 
 	if (!Send(sizeof(TPacketCGPong), &kPacketPong))
 		return false;
 
-	if (IsSecurityMode())
-		return SendSequence();
-	else
-		return true;
+	return true;
 }
 
 bool CGuildMarkDownloader::__LoginState_RecvPhase()

@@ -1784,6 +1784,7 @@ typedef struct packet_ping
 typedef struct packet_pong
 {
 	uint8_t		bHeader;
+	uint8_t		bSequence;
 } TPacketCGPong;
 
 typedef struct packet_script

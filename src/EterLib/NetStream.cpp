@@ -857,6 +857,11 @@ bool CNetworkStream::SendSequence()
 	return Send(sizeof(BYTE), &bSeq);
 }
 
+uint8_t CNetworkStream::GetNextSequence()
+{
+	return m_SequenceGenerator(UINT8_MAX + 1);
+}
+
 bool CNetworkStream::OnProcess()
 {
 	return true;
