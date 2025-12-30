@@ -15,7 +15,7 @@ BOOL HAIR_COLOR_ENABLE=FALSE;
 BOOL USE_ARMOR_SPECULAR=FALSE;
 BOOL RIDE_HORSE_ENABLE=TRUE;
 const float c_fDefaultRotationSpeed = 1200.0f;
-const float c_fDefaultHorseRotationSpeed = 300.0f;
+const float c_fDefaultHorseRotationSpeed = 1800.0f;
 
 
 bool IsWall(unsigned race)
