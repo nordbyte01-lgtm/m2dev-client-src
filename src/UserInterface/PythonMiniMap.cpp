@@ -230,12 +230,11 @@ void CPythonMiniMap::Update(float fCenterX, float fCenterY)
 
 			if (fDistanceFromCenter >= c_fMiniMapWindowRadius)
 			{
-				float fRadianX = acosf(fDistanceFromCenterX / fDistanceFromCenter);
-				float fRadianY = asinf(fDistanceFromCenterY / fDistanceFromCenter);
-				fDistanceFromCenterX = 55.0f * cosf(fRadianX);
-				fDistanceFromCenterY = 55.0f * sinf(fRadianY);
-				rAtlasMarkInfo.m_fMiniMapX = ( m_fWidth - (float)m_WhiteMark.GetWidth() ) / 2.0f + fDistanceFromCenterX + m_fScreenX + 2.0f;
-				rAtlasMarkInfo.m_fMiniMapY = ( m_fHeight - (float)m_WhiteMark.GetHeight() ) / 2.0f + fDistanceFromCenterY + m_fScreenY + 2.0f;
+				float fRadian = atan2f(fDistanceFromCenterY, fDistanceFromCenterX);
+				fDistanceFromCenterX = 55.0f * cosf(fRadian);
+				fDistanceFromCenterY = 55.0f * sinf(fRadian);
+				rAtlasMarkInfo.m_fMiniMapX = ( m_fWidth - (float)m_WhiteMark.GetWidth() ) / 2.0f + fDistanceFromCenterX + m_fScreenX;
+				rAtlasMarkInfo.m_fMiniMapY = ( m_fHeight - (float)m_WhiteMark.GetHeight() ) / 2.0f + fDistanceFromCenterY + m_fScreenY;
 			}
 			else
 			{
@@ -465,7 +464,10 @@ void CPythonMiniMap::Render(float fScreenX, float fScreenY)
 			if (rAtlasMarkInfo.m_fMiniMapY <= 0.0f)
 				continue;
 
-			__RenderTargetMark(rAtlasMarkInfo.m_fMiniMapX, rAtlasMarkInfo.m_fMiniMapY);
+			__RenderTargetMark(
+				rAtlasMarkInfo.m_fMiniMapX + m_WhiteMark.GetWidth() / 2,
+				rAtlasMarkInfo.m_fMiniMapY + m_WhiteMark.GetHeight() / 2
+			);
 		}
 	}
 
