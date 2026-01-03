@@ -16,6 +16,8 @@
 
 #include <filesystem>
 #include <format>
+#include <thread>
+#include <atomic>
 
 #include <stdlib.h>
 #include <utf8.h>
@@ -166,11 +168,45 @@ bool PackInitialize(const char * c_pszFolder)
 		"uiloading",
 	};
 
-	CPackManager::instance().AddPack(std::format("{}/root.pck", c_pszFolder));
-	for (const std::string& packFileName : packFiles) {
-		CPackManager::instance().AddPack(std::format("{}/{}.pck", c_pszFolder, packFileName));
+	Tracef("PackInitialize: Loading root.pck...");
+	if (!CPackManager::instance().AddPack(std::format("{}/root.pck", c_pszFolder)))
+	{
+		TraceError("Failed to load root.pck");
+		return false;
 	}
 
+	Tracef("PackInitialize: Loading %d pack files in parallel...", packFiles.size());
+	const size_t numThreads = std::min<size_t>(std::thread::hardware_concurrency(), packFiles.size());
+	const size_t packsPerThread = (packFiles.size() + numThreads - 1) / numThreads;
+
+	std::vector<std::thread> threads;
+	std::atomic<size_t> failedCount(0);
+
+	for (size_t t = 0; t < numThreads; ++t)
+	{
+		threads.emplace_back([&, t]() {
+			size_t start = t * packsPerThread;
+			size_t end = std::min(start + packsPerThread, packFiles.size());
+
+			for (size_t i = start; i < end; ++i)
+			{
+				std::string packPath = std::format("{}/{}.pck", c_pszFolder, packFiles[i]);
+				if (!CPackManager::instance().AddPack(packPath))
+				{
+					TraceError("Failed to load %s", packPath.c_str());
+					failedCount++;
+				}
+			}
+		});
+	}
+
+	// Wait for all threads to complete
+	for (auto& thread : threads)
+	{
+		thread.join();
+	}
+
+	Tracef("PackInitialize: Completed! Failed: %d / %d", failedCount.load(), packFiles.size());
 	return true;
 }
 
