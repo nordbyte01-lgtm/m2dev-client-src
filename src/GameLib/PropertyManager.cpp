@@ -18,12 +18,18 @@ bool CPropertyManager::Initialize(const char * c_pszPackFileName)
 	if (c_pszPackFileName)
 	{
 		m_pack = std::make_shared<CPack>();
-		if (!m_pack->Open(c_pszPackFileName, m_fileDict)) {
+		if (!m_pack->Load(c_pszPackFileName)) {
 			LogBoxf("Cannot open property pack file (filename %s)", c_pszPackFileName);
 			return false;
 		}
 
 		m_isFileMode = false;
+
+		const auto& index = m_pack->GetIndex();
+		for (const auto& entry : index)
+		{
+			m_fileDict.emplace(entry.file_name, std::make_pair(m_pack, entry));
+		}
 
 		for (auto it = m_fileDict.begin(); it != m_fileDict.end(); ++it) {
 			std::string stFileName = it->second.second.file_name;

@@ -13,7 +13,7 @@ static ZSTD_DCtx* GetThreadLocalZSTDContext()
 	return g_zstdDCtx;
 }
 
-bool CPack::Open(const std::string& path, TPackFileMap& entries)
+bool CPack::Load(const std::string& path)
 {
 	std::error_code ec;
 	m_file.map(path, ec);
@@ -34,12 +34,12 @@ bool CPack::Open(const std::string& path, TPackFileMap& entries)
 		return false;
 	}
 
+	m_index.resize(m_header.entry_num);
+
 	for (size_t i = 0; i < m_header.entry_num; i++) {
-		TPackFileEntry entry;
+		TPackFileEntry& entry = m_index[i];
 		memcpy(&entry, m_file.data() + sizeof(TPackFileHeader) + i * sizeof(TPackFileEntry), sizeof(TPackFileEntry));
 		m_decryption.ProcessData((CryptoPP::byte*)&entry, (CryptoPP::byte*)&entry, sizeof(TPackFileEntry));
-
-		entries[entry.file_name] = std::make_pair(shared_from_this(), entry);
 
 		if (file_size < m_header.data_begin + entry.offset + entry.compressed_size) {
 			return false;

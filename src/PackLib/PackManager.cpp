@@ -23,8 +23,19 @@ bool CPackManager::AddPack(const std::string& path)
 {
 	std::shared_ptr<CPack> pack = std::make_shared<CPack>();
 
+	if (!pack->Load(path))
+	{
+		return false;
+	}
+
 	std::lock_guard<std::mutex> lock(m_mutex);
-	return pack->Open(path, m_entries);
+	const auto& index = pack->GetIndex();
+	for (const auto& entry : index)
+	{
+		m_entries[entry.file_name] = std::make_pair(pack, entry);
+	}
+
+	return true;
 }
 
 bool CPackManager::GetFile(std::string_view path, TPackFile& result)

@@ -2,6 +2,10 @@
 #include "RaceManager.h"
 #include "RaceMotionData.h"
 #include "PackLib/PackManager.h"
+#include <future>
+#include <vector>
+#include <set>
+#include <algorithm>
 
 bool CRaceManager::s_bPreloaded = false;
 
@@ -456,39 +460,85 @@ void CRaceManager::PreloadPlayerRaceMotions()
 	if (s_bPreloaded)
 		return;
 
-	// Preload all player races (0-7)
+	CRaceManager& rkRaceMgr = CRaceManager::Instance();
+
+	// Phase 1: Parallel Load Race Data (MSM)
+	std::vector<std::future<CRaceData*>> raceLoadFutures;
+
+	for (DWORD dwRace = 0; dwRace <= 7; ++dwRace)
+	{
+		TRaceDataIterator it = rkRaceMgr.m_RaceDataMap.find(dwRace);
+		if (it == rkRaceMgr.m_RaceDataMap.end()) {
+			raceLoadFutures.push_back(std::async(std::launch::async, [&rkRaceMgr, dwRace]() {
+				return rkRaceMgr.__LoadRaceData(dwRace);
+			}));
+		}
+	}
+
+	for (auto& f : raceLoadFutures) {
+		CRaceData* pRaceData = f.get();
+		if (pRaceData) {
+			rkRaceMgr.m_RaceDataMap.insert(TRaceDataMap::value_type(pRaceData->GetRaceIndex(), pRaceData));
+		}
+	}
+
+	// Phase 2: Parallel Load Motions
+	std::set<CGraphicThing*> uniqueMotions;
+
 	for (DWORD dwRace = 0; dwRace <= 7; ++dwRace)
 	{
 		CRaceData* pRaceData = NULL;
-		if (!Instance().GetRaceDataPointer(dwRace, &pRaceData))
+		TRaceDataIterator it = rkRaceMgr.m_RaceDataMap.find(dwRace);
+		if (it != rkRaceMgr.m_RaceDataMap.end())
+			pRaceData = it->second;
+
+		if (!pRaceData)
 			continue;
 
 		CRaceData::TMotionModeDataIterator itor;
-
 		if (pRaceData->CreateMotionModeIterator(itor))
 		{
 			do
 			{
 				CRaceData::TMotionModeData* pMotionModeData = itor->second;
-
-				CRaceData::TMotionVectorMap::iterator itorMotion = pMotionModeData->MotionVectorMap.begin();
-				for (; itorMotion != pMotionModeData->MotionVectorMap.end(); ++itorMotion)
+				for (auto& itorMotion : pMotionModeData->MotionVectorMap)
 				{
-					const CRaceData::TMotionVector& c_rMotionVector = itorMotion->second;
-					CRaceData::TMotionVector::const_iterator it;
-
-					for (it = c_rMotionVector.begin(); it != c_rMotionVector.end(); ++it)
+					const CRaceData::TMotionVector& c_rMotionVector = itorMotion.second;
+					for (const auto& motion : c_rMotionVector)
 					{
-						CGraphicThing* pMotion = it->pMotion;
-						if (pMotion)
-						{
-							pMotion->AddReference();
-						}
+						if (motion.pMotion)
+							uniqueMotions.insert(motion.pMotion);
 					}
 				}
 			}
 			while (pRaceData->NextMotionModeIterator(itor));
 		}
+	}
+
+	std::vector<CGraphicThing*> motionVec(uniqueMotions.begin(), uniqueMotions.end());
+	size_t total = motionVec.size();
+
+	if (total > 0) {
+		size_t threadCount = std::thread::hardware_concurrency();
+		if (threadCount == 0) threadCount = 4;
+		
+		size_t chunkSize = (total + threadCount - 1) / threadCount;
+		std::vector<std::future<void>> motionFutures;
+
+		for (size_t i = 0; i < threadCount; ++i) {
+			size_t start = i * chunkSize;
+			size_t end = std::min(start + chunkSize, total);
+			
+			if (start < end) {
+				motionFutures.push_back(std::async(std::launch::async, [start, end, &motionVec]() {
+					for (size_t k = start; k < end; ++k) {
+						motionVec[k]->AddReference();
+					}
+				}));
+			}
+		}
+		
+		for (auto& f : motionFutures) f.get();
 	}
 
 	s_bPreloaded = true;

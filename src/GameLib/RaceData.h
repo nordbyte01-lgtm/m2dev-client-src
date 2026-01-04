@@ -137,6 +137,7 @@ class CRaceData
 		void Destroy();
 
 		// Codes For Client
+		DWORD GetRaceIndex() const { return m_dwRaceIndex; }
 		const char* GetBaseModelFileName() const;
 		const char* GetAttributeFileName() const;
 		const char* GetMotionListFileName() const;

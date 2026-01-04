@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EterBase/Debug.h"
+#include <mutex>
 
 template<typename T>
 class CDynamicPool
@@ -22,6 +23,7 @@ class CDynamicPool
 
 		void Destroy()
 		{
+			std::lock_guard<std::recursive_mutex> lock(m_mutex);
 			FreeAll();
 
 			for (T* p : m_Chunks)
@@ -40,6 +42,7 @@ class CDynamicPool
 		template<class... _Types>
 		T* Alloc(_Types&&... _Args)
 		{
+			std::lock_guard<std::recursive_mutex> lock(m_mutex);
 			if (m_Free.empty())
 				Grow();
 
@@ -51,11 +54,13 @@ class CDynamicPool
 		void Free(T* p)
 		{
 			p->~T();
+			std::lock_guard<std::recursive_mutex> lock(m_mutex);
 			m_Free.push_back(p);
 		}
 
 		void FreeAll()
 		{
+			std::lock_guard<std::recursive_mutex> lock(m_mutex);
 			for (T* p : m_Data) {
 				if (std::find(m_Free.begin(), m_Free.end(), p) == m_Free.end()) {
 					p->~T();
@@ -66,6 +71,7 @@ class CDynamicPool
 		
 		size_t GetCapacity()
 		{
+			std::lock_guard<std::recursive_mutex> lock(m_mutex);
 			return m_Data.size();
 		}
 
@@ -94,4 +100,5 @@ class CDynamicPool
 		std::vector<T*> m_Free;
 
 		std::vector<T*> m_Chunks;
+		std::recursive_mutex m_mutex;
 };
