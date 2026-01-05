@@ -7,6 +7,7 @@
 #include <set>
 #include <map>
 #include <string>
+#include <mutex>
 
 class CTextureCache;
 
@@ -76,6 +77,8 @@ class CResourceManager : public CSingleton<CResourceManager>
 		static CFileLoaderThread				ms_loadingThread;
 		CFileLoaderThreadPool*					m_pLoaderThreadPool;
 		CTextureCache*							m_pTextureCache;
+
+		mutable std::mutex						m_ResourceMapMutex;  // Thread-safe resource map access
 };
 
 extern int g_iLoadingDelayTime;

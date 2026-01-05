@@ -32,6 +32,10 @@ void CActorInstance::SetMaterialAlpha(DWORD dwAlpha)
 
 void CActorInstance::OnRender()
 {
+	// Early out if race data is not loaded yet (async loading)
+	if (!m_pkCurRaceData)
+		return;
+
 	// MR-5: Fix effect rendering when actor is semi-transparent
 	// Credits to d1str4ught
 	if (GetAlphaValue() < 1.0f)

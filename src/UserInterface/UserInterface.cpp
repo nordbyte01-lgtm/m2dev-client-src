@@ -10,6 +10,7 @@
 #endif
 
 #include "eterLib/Util.h"
+#include "EterLib/GameThreadPool.h"
 #include "EterBase/lzo.h"
 
 #include "PackLib/PackManager.h"
@@ -180,14 +181,16 @@ bool PackInitialize(const char * c_pszFolder)
 	const size_t packsPerThread = (packFiles.size() + numThreads - 1) / numThreads;
 
 	std::vector<std::thread> threads;
+	threads.reserve(numThreads);  // Pre-allocate to prevent reallocation
 	std::atomic<size_t> failedCount(0);
 
+	// Create all threads first (prevents vector reallocation during emplace_back)
 	for (size_t t = 0; t < numThreads; ++t)
 	{
-		threads.emplace_back([&, t]() {
-			size_t start = t * packsPerThread;
-			size_t end = std::min(start + packsPerThread, packFiles.size());
+		size_t start = t * packsPerThread;
+		size_t end = std::min(start + packsPerThread, packFiles.size());
 
+		threads.emplace_back([&failedCount, &packFiles, c_pszFolder, start, end]() {
 			for (size_t i = start; i < end; ++i)
 			{
 				std::string packPath = std::format("{}/{}.pck", c_pszFolder, packFiles[i]);
@@ -295,6 +298,9 @@ static bool Main(HINSTANCE hInstance, LPSTR lpCmdLine)
 		LogBox("Pack Initialization failed. Check log.txt file..");
 		return false;
 	}
+
+	// Create game thread pool singleton before CPythonApplication
+	static CGameThreadPool gameThreadPool;
 
 	auto app = new CPythonApplication;
 	app->Initialize (hInstance);

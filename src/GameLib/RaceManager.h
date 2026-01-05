@@ -1,6 +1,8 @@
 #pragma once
 
 #include "RaceData.h"
+#include <mutex>
+#include <set>
 
 class CRaceManager : public CSingleton<CRaceManager>
 {
@@ -29,6 +31,10 @@ class CRaceManager : public CSingleton<CRaceManager>
 
 		BOOL GetRaceDataPointer(DWORD dwRaceIndex, CRaceData ** ppRaceData);
 
+		// Async race loading
+		void RequestAsyncRaceLoad(DWORD dwRaceIndex);
+		bool IsRaceLoading(DWORD dwRaceIndex) const;
+
 		// Race motion preloading
 		static void PreloadPlayerRaceMotions();
 		static bool IsPreloaded() { return s_bPreloaded; }
@@ -42,6 +48,10 @@ class CRaceManager : public CSingleton<CRaceManager>
 
 	protected:
 		TRaceDataMap					m_RaceDataMap;
+		mutable std::mutex				m_RaceDataMapMutex;
+
+		std::set<DWORD>					m_LoadingRaces;
+		mutable std::mutex				m_LoadingRacesMutex;
 
 		std::map<std::string, std::string> m_kMap_stRaceName_stSrcName;
 		std::map<DWORD, std::string>	m_kMap_dwRaceKey_stRaceName;

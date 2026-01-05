@@ -939,6 +939,13 @@ unsigned __GetWindowMode(bool windowed)
 
 bool CPythonApplication::Create(PyObject * poSelf, const char * c_szName, int width, int height, int Windowed)
 {
+	// Initialize Game Thread Pool first - required by other systems
+	CGameThreadPool* pThreadPool = CGameThreadPool::InstancePtr();
+	if (pThreadPool)
+	{
+		pThreadPool->Initialize();
+	}
+
 	NANOBEGIN
 		Windowed = CPythonSystem::Instance().IsWindowed() ? 1 : 0;
 
@@ -1249,6 +1256,9 @@ void CPythonApplication::Destroy()
 
 	m_kEftMgr.Destroy();
 	m_LightManager.Destroy();
+
+	// Game Thread Pool
+	CGameThreadPool::Instance().Destroy();
 
 	// DEFAULT_FONT
 	DefaultFont_Cleanup();

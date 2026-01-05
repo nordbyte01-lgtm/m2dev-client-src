@@ -6,6 +6,7 @@
 #include "eterLib/GrpDevice.h"
 #include "eterLib/NetDevice.h"
 #include "eterLib/GrpLightManager.h"
+#include "eterLib/GameThreadPool.h"
 #include "EffectLib/EffectManager.h"
 #include "gamelib/RaceManager.h"
 #include "gamelib/ItemManager.h"

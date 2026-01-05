@@ -252,6 +252,9 @@ void CResourceManager::RegisterResourceNewFunctionByTypePointer(int iType, CReso
 
 CResource * CResourceManager::InsertResourcePointer(DWORD dwFileCRC, CResource* pResource)
 {
+	// Thread-safe check and insert
+	std::lock_guard<std::mutex> lock(m_ResourceMapMutex);
+
 	TResourcePointerMap::iterator itor = m_pResMap.find(dwFileCRC);
 
 	if (m_pResMap.end() != itor)
