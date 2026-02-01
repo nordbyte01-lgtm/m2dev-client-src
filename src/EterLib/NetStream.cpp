@@ -629,7 +629,7 @@ const char * GetRecvHeaderName(BYTE header)
 		stringList[30] = "HEADER_GC_QUICKSLOT_SWAP";
 		stringList[31] = "HEADER_GC_ITEM_OWNERSHIP";
 		stringList[33] = "HEADER_GC_ITEM_UNBIND_TIME";
-		stringList[34] = "HEADER_GC_WHISPER	";
+		stringList[34] = "HEADER_GC_WHISPER";
 		stringList[35] = "HEADER_GC_ALERT";
 		stringList[36] = "HEADER_GC_MOTION";
 		stringList[38] = "HEADER_GC_SHOP";
