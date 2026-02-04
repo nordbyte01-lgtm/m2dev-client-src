@@ -559,8 +559,10 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 			break;
 	}
 
-	static std::unordered_map<LPDIRECT3DTEXTURE9, std::vector<SVertex>> s_vtxBatches;
-	s_vtxBatches.clear();
+	static std::unordered_map<LPDIRECT3DTEXTURE9, std::vector<SVertex>> s_outlineBatches;
+	static std::unordered_map<LPDIRECT3DTEXTURE9, std::vector<SVertex>> s_mainBatches;
+	s_outlineBatches.clear();
+	s_mainBatches.clear();
 
 	STATEMANAGER.SaveRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
 	STATEMANAGER.SaveRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
@@ -576,6 +578,10 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 	STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAARG1,	D3DTA_TEXTURE);
 	STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAARG2,	D3DTA_DIFFUSE);
 	STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAOP,	D3DTOP_MODULATE);
+
+	// LCD subpixel rendering: mask alpha writes to prevent corruption during two-pass blending
+	STATEMANAGER.SaveRenderState(D3DRS_COLORWRITEENABLE,
+		D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE);
 
 	{
 		const float fFontHalfWeight=1.0f;
@@ -647,7 +653,7 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 				fFontEy = fFontSy + fFontHeight;
 
 				pFontTexture->SelectTexture(pCurCharInfo->index);
-				std::vector<SVertex>& vtxBatch = s_vtxBatches[pFontTexture->GetD3DTexture()];
+				std::vector<SVertex>& vtxBatch = s_outlineBatches[pFontTexture->GetD3DTexture()];
 
 				akVertex[0].u=pCurCharInfo->left;
 				akVertex[0].v=pCurCharInfo->top;
@@ -755,7 +761,7 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 			fFontEy = fFontSy + fFontHeight;
 
 			pFontTexture->SelectTexture(pCurCharInfo->index);
-			std::vector<SVertex>& vtxBatch = s_vtxBatches[pFontTexture->GetD3DTexture()];
+			std::vector<SVertex>& vtxBatch = s_mainBatches[pFontTexture->GetD3DTexture()];
 
 			akVertex[0].x=fFontSx;
 			akVertex[0].y=fFontSy;
@@ -859,13 +865,46 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 		}
 	}
 
-	for (const auto& [pTexture, vtxBatch] : s_vtxBatches) {
-		if (vtxBatch.empty())
-			continue;
+	// LCD subpixel two-pass rendering: correct per-channel alpha blending
+	auto DrawBatchLCD = [](const std::unordered_map<LPDIRECT3DTEXTURE9, std::vector<SVertex>>& batches, bool skipPass2) {
+		for (const auto& [pTexture, vtxBatch] : batches) {
+			if (vtxBatch.empty())
+				continue;
 
-		STATEMANAGER.SetTexture(0, pTexture);
-		STATEMANAGER.DrawPrimitiveUP(D3DPT_TRIANGLELIST, vtxBatch.size() / 3, vtxBatch.data(), sizeof(SVertex));
-	}
+			STATEMANAGER.SetTexture(0, pTexture);
+
+			// Pass 1: dest.rgb *= (1 - coverage.rgb)
+			STATEMANAGER.SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ZERO);
+			STATEMANAGER.SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCCOLOR);
+			STATEMANAGER.SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+			STATEMANAGER.SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+			STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+			STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+			STATEMANAGER.DrawPrimitiveUP(D3DPT_TRIANGLELIST,
+				vtxBatch.size() / 3, vtxBatch.data(), sizeof(SVertex));
+
+			if (!skipPass2) {
+				// Pass 2: dest.rgb += textColor.rgb * coverage.rgb
+				STATEMANAGER.SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
+				STATEMANAGER.SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
+				STATEMANAGER.SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+				STATEMANAGER.SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+				STATEMANAGER.SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
+				STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
+				STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+				STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
+				STATEMANAGER.DrawPrimitiveUP(D3DPT_TRIANGLELIST,
+					vtxBatch.size() / 3, vtxBatch.data(), sizeof(SVertex));
+			}
+		}
+	};
+
+	// Draw outline batches first (skip Pass 2 for black outlines — MODULATE with black = 0)
+	bool outlineIsBlack = ((m_dwOutLineColor & 0x00FFFFFF) == 0);
+	DrawBatchLCD(s_outlineBatches, outlineIsBlack);
+
+	// Draw main text batches (always both passes)
+	DrawBatchLCD(s_mainBatches, false);
 
 	if (m_isCursor)
 	{
@@ -973,6 +1012,7 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 		}
 	}
 
+	STATEMANAGER.RestoreRenderState(D3DRS_COLORWRITEENABLE);
 	STATEMANAGER.RestoreRenderState(D3DRS_SRCBLEND);
 	STATEMANAGER.RestoreRenderState(D3DRS_DESTBLEND);
 

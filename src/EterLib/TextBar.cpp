@@ -91,7 +91,7 @@ void CTextBar::GetTextExtent(const char* c_szText, SIZE* p_size)
 		}
 
 		if (FT_Load_Glyph(m_ftFace, glyphIndex, FT_LOAD_DEFAULT) == 0)
-			totalAdvance += (int)ceilf((float)(m_ftFace->glyph->advance.x) / 64.0f);
+			totalAdvance += (int)ceilf((float)(m_ftFace->glyph->advance.x) / 64.0f) + 1;  // +1px letter spacing
 
 		prevIndex = glyphIndex;
 	}
@@ -174,7 +174,7 @@ void CTextBar::TextOut(int ix, int iy, const char * c_szText)
 			}
 		}
 
-		penX += (int)ceilf((float)(slot->advance.x) / 64.0f);
+		penX += (int)ceilf((float)(slot->advance.x) / 64.0f) + 1;  // +1px letter spacing
 		prevIndex = glyphIndex;
 	}
 

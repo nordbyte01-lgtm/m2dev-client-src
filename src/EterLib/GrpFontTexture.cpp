@@ -277,16 +277,16 @@ CGraphicFontTexture::TCharacterInfomation* CGraphicFontTexture::UpdateCharacterI
 			return NULL;
 	}
 
-	if (FT_Load_Glyph(m_ftFace, glyphIndex, FT_LOAD_DEFAULT) != 0)
+	if (FT_Load_Glyph(m_ftFace, glyphIndex, FT_LOAD_TARGET_LCD) != 0)
 		return NULL;
 
-	if (FT_Render_Glyph(m_ftFace->glyph, FT_RENDER_MODE_NORMAL) != 0)
+	if (FT_Render_Glyph(m_ftFace->glyph, FT_RENDER_MODE_LCD) != 0)
 		return NULL;
 
 	FT_GlyphSlot slot = m_ftFace->glyph;
 	FT_Bitmap& bitmap = slot->bitmap;
 
-	int glyphBitmapWidth = bitmap.width;
+	int glyphBitmapWidth = bitmap.width / 3;  // LCD bitmap is 3x wider (R,G,B per pixel)
 	int glyphBitmapHeight = bitmap.rows;
 	int bearingX = slot->bitmap_left;
 	int bearingY = slot->bitmap_top;
@@ -347,7 +347,7 @@ CGraphicFontTexture::TCharacterInfomation* CGraphicFontTexture::UpdateCharacterI
 		}
 	}
 
-	// Copy grayscale FreeType bitmap into atlas buffer with gamma correction
+	// Copy LCD subpixel FreeType bitmap into atlas buffer (R,G,B per-channel coverage)
 	for (int row = 0; row < glyphBitmapHeight; ++row)
 	{
 		int atlasY = m_y + yOffset + row;
@@ -359,11 +359,15 @@ CGraphicFontTexture::TCharacterInfomation* CGraphicFontTexture::UpdateCharacterI
 
 		for (int col = 0; col < glyphBitmapWidth; ++col)
 		{
-			unsigned char alpha = srcRow[col];
-			if (alpha)
+			unsigned char r = srcRow[col * 3 + 0];
+			unsigned char g = srcRow[col * 3 + 1];
+			unsigned char b = srcRow[col * 3 + 2];
+			if (r | g | b)
 			{
-				alpha = s_alphaGammaLUT.table[alpha];
-				dstRow[col] = ((DWORD)alpha << 24) | 0x00FFFFFF;
+				unsigned char a = (r > g) ? r : g;
+				if (b > a) a = b;
+				// A8R8G8B8: A=max_coverage, R=r_cov, G=g_cov, B=b_cov
+				dstRow[col] = ((DWORD)a << 24) | ((DWORD)r << 16) | ((DWORD)g << 8) | (DWORD)b;
 			}
 		}
 	}
@@ -383,7 +387,7 @@ CGraphicFontTexture::TCharacterInfomation* CGraphicFontTexture::UpdateCharacterI
 	rNewCharInfo.advance = advance;
 	rNewCharInfo.bearingX = (float)bearingX;
 
-	m_x += cellWidth;
+	m_x += cellWidth + 1;  // +1 horizontal padding to prevent bilinear bleed
 
 	if (m_step < cellHeight)
 		m_step = cellHeight;

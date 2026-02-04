@@ -1,6 +1,10 @@
 #include "StdAfx.h"
 #include "FontManager.h"
 
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include FT_LCD_FILTER_H
+
 #include <algorithm>
 #include <cctype>
 #include <sys/stat.h>
@@ -53,6 +57,9 @@ bool CFontManager::Initialize()
 	}
 
 	m_bInitialized = true;
+
+	// Enable LCD subpixel filter to reduce color fringing
+	FT_Library_SetLcdFilter(m_ftLibrary, FT_LCD_FILTER_DEFAULT);
 
 	// Register default font name -> file mappings
 	// Korean system fonts
