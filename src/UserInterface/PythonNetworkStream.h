@@ -1,8 +1,10 @@
 #pragma once
 
+#include <unordered_map>
+#include <vector>
+
 #include "EterLib/FuncObject.h"
 #include "EterLib/NetStream.h"
-#include "EterLib/NetPacketHeaderMap.h"
 
 #include "InsultChecker.h"
 
@@ -15,6 +17,15 @@ struct SNetworkUpdateActorData;
 
 class CPythonNetworkStream : public CNetworkStream, public CSingleton<CPythonNetworkStream>
 {
+	public:
+		// Table-driven packet dispatch (Phase 5)
+		struct PacketHandlerEntry {
+			bool (CPythonNetworkStream::*handler)();
+			uint16_t minSize;
+			bool exitPhase;		// true = stop dispatch loop after handling (phase-changing packets)
+		};
+		using PacketHandlerMap = std::unordered_map<uint16_t, PacketHandlerEntry>;
+
 	public:
 		enum
 		{
@@ -266,13 +277,9 @@ class CPythonNetworkStream : public CNetworkStream, public CSingleton<CPythonNet
 		// 용홍석 강화
 		bool SendDragonSoulRefinePacket(BYTE bRefineType, TItemPos* pos);
 
-		// Handshake
-		bool RecvHandshakePacket();
-		bool RecvHandshakeOKPacket();
-
-		// Secure key exchange (libsodium/XChaCha20-Poly1305)
-		bool RecvKeyChallenge();
-		bool RecvKeyComplete();
+		// Secure key exchange override (adds time sync on top of base class crypto)
+		bool RecvKeyChallenge() override;
+		bool RecvKeyComplete() override;
 
 		// ETC
 		DWORD GetMainActorVID();
@@ -311,7 +318,6 @@ class CPythonNetworkStream : public CNetworkStream, public CSingleton<CPythonNet
 		bool SendC2CPacket(DWORD dwSize, void * pData);
 		bool SendChatPacket(const char * c_szChat, BYTE byType = CHAT_TYPE_TALKING);
 		bool SendWhisperPacket(const char * name, const char * c_szChat);
-		bool SendMobileMessagePacket(const char * name, const char * c_szChat);
 		bool SendMessengerAddByVIDPacket(DWORD vid);
 		bool SendMessengerAddByNamePacket(const char * c_szName);
 		bool SendMessengerRemovePacket(const char * c_szKey, const char * c_szName);
@@ -389,7 +395,6 @@ class CPythonNetworkStream : public CNetworkStream, public CSingleton<CPythonNet
 		// Common
 		bool RecvErrorPacket(int header);
 		bool RecvPingPacket();
-		bool RecvDefaultPacket(int header);
 		bool RecvPhasePacket();
 
 		// Login Phase
@@ -409,10 +414,7 @@ class CPythonNetworkStream : public CNetworkStream, public CSingleton<CPythonNet
 		bool __RecvChangeName();
 
 		// Loading Phase
-		bool RecvMainCharacter();		
-		bool RecvMainCharacter2_EMPIRE();
-		bool RecvMainCharacter3_BGM();
-		bool RecvMainCharacter4_BGM_VOL();
+		bool RecvMainCharacter();
 
 		void __SetFieldMusicFileName(const char* musicName);
 		void __SetFieldMusicFileInfo(const char* musicName, float vol);
@@ -457,8 +459,30 @@ class CPythonNetworkStream : public CNetworkStream, public CSingleton<CPythonNet
 		bool RecvMotionPacket();
 
 		bool RecvShopPacket();
+		// Shop sub-handlers
+		bool RecvShopSub_Start(const std::vector<char>& buf);
+		bool RecvShopSub_StartEx(const std::vector<char>& buf);
+		bool RecvShopSub_End(const std::vector<char>& buf);
+		bool RecvShopSub_UpdateItem(const std::vector<char>& buf);
+		bool RecvShopSub_UpdatePrice(const std::vector<char>& buf);
+		bool RecvShopSub_NotEnoughMoney(const std::vector<char>& buf);
+		bool RecvShopSub_NotEnoughMoneyEx(const std::vector<char>& buf);
+		bool RecvShopSub_Soldout(const std::vector<char>& buf);
+		bool RecvShopSub_InventoryFull(const std::vector<char>& buf);
+		bool RecvShopSub_InvalidPos(const std::vector<char>& buf);
+
 		bool RecvShopSignPacket();
+
 		bool RecvExchangePacket();
+		// Exchange sub-handlers
+		bool RecvExchangeSub_Start(const TPacketGCExchange& pack);
+		bool RecvExchangeSub_ItemAdd(const TPacketGCExchange& pack);
+		bool RecvExchangeSub_ItemDel(const TPacketGCExchange& pack);
+		bool RecvExchangeSub_ElkAdd(const TPacketGCExchange& pack);
+		bool RecvExchangeSub_Accept(const TPacketGCExchange& pack);
+		bool RecvExchangeSub_End(const TPacketGCExchange& pack);
+		bool RecvExchangeSub_Already(const TPacketGCExchange& pack);
+		bool RecvExchangeSub_LessElk(const TPacketGCExchange& pack);
 
 		// Quest
 		bool RecvScriptPacket();
@@ -489,6 +513,28 @@ class CPythonNetworkStream : public CNetworkStream, public CSingleton<CPythonNet
 
 		// Guild
 		bool RecvGuild();
+		// Guild sub-handlers
+		bool RecvGuildSub_Login(const TPacketGCGuild& pack);
+		bool RecvGuildSub_Logout(const TPacketGCGuild& pack);
+		bool RecvGuildSub_Remove(const TPacketGCGuild& pack);
+		bool RecvGuildSub_List(const TPacketGCGuild& pack);
+		bool RecvGuildSub_Grade(const TPacketGCGuild& pack);
+		bool RecvGuildSub_GradeName(const TPacketGCGuild& pack);
+		bool RecvGuildSub_GradeAuth(const TPacketGCGuild& pack);
+		bool RecvGuildSub_Info(const TPacketGCGuild& pack);
+		bool RecvGuildSub_Comments(const TPacketGCGuild& pack);
+		bool RecvGuildSub_ChangeExp(const TPacketGCGuild& pack);
+		bool RecvGuildSub_ChangeMemberGrade(const TPacketGCGuild& pack);
+		bool RecvGuildSub_SkillInfo(const TPacketGCGuild& pack);
+		bool RecvGuildSub_ChangeMemberGeneral(const TPacketGCGuild& pack);
+		bool RecvGuildSub_Invite(const TPacketGCGuild& pack);
+		bool RecvGuildSub_War(const TPacketGCGuild& pack);
+		bool RecvGuildSub_Name(const TPacketGCGuild& pack);
+		bool RecvGuildSub_WarList(const TPacketGCGuild& pack);
+		bool RecvGuildSub_WarEndList(const TPacketGCGuild& pack);
+		bool RecvGuildSub_WarPoint(const TPacketGCGuild& pack);
+		bool RecvGuildSub_MoneyChange(const TPacketGCGuild& pack);
+
 		bool RecvMarkUpdate();
 
 		// Party
@@ -566,8 +612,16 @@ class CPythonNetworkStream : public CNetworkStream, public CSingleton<CPythonNet
 		BOOL IsGameOnline();
 
 	protected:
-		bool CheckPacket(TPacketHeader * pRetHeader);
-		
+		// Table-driven packet dispatch
+		bool DispatchPacket(const PacketHandlerMap& handlers);
+
+		void RegisterOfflineHandlers();
+		void RegisterHandshakeHandlers();
+		void RegisterLoginHandlers();
+		void RegisterSelectHandlers();
+		void RegisterLoadingHandlers();
+		void RegisterGameHandlers();
+
 		void __InitializeGamePhase();
 		void __InitializeMarkAuth();
 		void __GlobalPositionToLocalPosition(int32_t& rGlobalX, int32_t& rGlobalY);
@@ -606,9 +660,7 @@ class CPythonNetworkStream : public CNetworkStream, public CSingleton<CPythonNet
 		void __SetGuildID(DWORD id);
 
 	protected:
-		TPacketGCHandshake m_HandshakeData;
 		DWORD m_dwChangingPhaseTime;
-		DWORD m_dwBindupRetryCount;
 		DWORD m_dwMainActorVID;
 		DWORD m_dwMainActorRace;
 		DWORD m_dwMainActorEmpire;
@@ -700,6 +752,14 @@ class CPythonNetworkStream : public CNetworkStream, public CSingleton<CPythonNet
 
 		std::deque<std::string> m_kQue_stHack;
 
+		// Per-phase handler dispatch tables
+		PacketHandlerMap m_offlineHandlers;
+		PacketHandlerMap m_handshakeHandlers;
+		PacketHandlerMap m_loginHandlers;
+		PacketHandlerMap m_selectHandlers;
+		PacketHandlerMap m_loadingHandlers;
+		PacketHandlerMap m_gameHandlers;
+
 	private:
 		struct SDirectEnterMode
 		{
@@ -726,4 +786,23 @@ class CPythonNetworkStream : public CNetworkStream, public CSingleton<CPythonNet
 		void __BettingGuildWar_Initialize();
 		void __BettingGuildWar_SetObserverCount(UINT uObserverCount);
 		void __BettingGuildWar_SetBettingMoney(UINT uBettingMoney);
+
+	// --- Packet sequence tracking (debug aid) ---
+	// Send tracking lives on CNetworkStream (base class); recv tracking is here.
+	public:
+		struct PacketLogEntry
+		{
+			uint32_t seq;
+			uint16_t header;
+			uint16_t length;
+		};
+
+		static constexpr size_t PACKET_LOG_SIZE = 32;
+
+		void		LogRecvPacket(uint16_t header, uint16_t length);
+		void		DumpRecentPackets() const;
+
+	private:
+		PacketLogEntry	m_aRecentRecvPackets[PACKET_LOG_SIZE] = {};
+		uint32_t		m_dwRecvPacketSeq = 0;
 };

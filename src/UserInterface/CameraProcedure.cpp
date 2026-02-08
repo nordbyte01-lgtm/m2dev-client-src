@@ -52,55 +52,6 @@ void CCamera::ProcessTerrainCollision()
 	}
 	else
 		SetCameraState(CAMERA_STATE_NORMAL);
-/*
-	if (rPythonBackground.GetPickingPointWithRayOnlyTerrain(m_kCameraFrontToTerrainRay, &v3CollisionPoint))
-	{
-		if (D3DXVec3Length(&(m_v3Eye - v3CollisionPoint)) < 4.0f * m_fTerrainCollisionRadius)
-		{
-			D3DXVECTOR3 v3NewEye = v3CollisionPoint - 4.0f * m_fTerrainCollisionRadius * m_v3View;
-			//printf("CameraFrontToTerrain new %f > old %f", v3NewEye.z, m_v3Eye.z);
-			SetEye(v3NewEye);
-		}
-	}
-
-	if (rPythonBackground.GetPickingPointWithRayOnlyTerrain(m_kCameraBackToTerrainRay, &v3CollisionPoint))
-	{
-		if (D3DXVec3Length(&(m_v3Eye - v3CollisionPoint)) < m_fTerrainCollisionRadius)
-		{
-			D3DXVECTOR3 v3NewEye = v3CollisionPoint + m_fTerrainCollisionRadius * m_v3View;
-			//printf("CameraBackToTerrain new %f > old %f", v3NewEye.z, m_v3Eye.z);
-			SetEye(v3NewEye);
-		}
-	}
-
-	// Left
-	if (rPythonBackground.GetPickingPointWithRayOnlyTerrain(m_kCameraLeftToTerrainRay, &v3CollisionPoint))
-	{
-		SetCameraState(CAMERA_STATE_CANTGOLEFT);
-		if (D3DXVec3Length(&(m_v3Eye - v3CollisionPoint)) < 3.0f * m_fTerrainCollisionRadius)
-		{
-			D3DXVECTOR3 v3NewEye = v3CollisionPoint + 3.0f * m_fTerrainCollisionRadius * m_v3Cross;
-			//printf("CameraLeftToTerrain new %f > old %f", v3NewEye.z, m_v3Eye.z);
-			SetEye(v3NewEye);
-		}
-	}
-	else
-		SetCameraState(CAMERA_STATE_NORMAL);
-
-	// Right
-	if (rPythonBackground.GetPickingPointWithRayOnlyTerrain(m_kCameraRightToTerrainRay, &v3CollisionPoint))
-	{
-		SetCameraState(CAMERA_STATE_CANTGORIGHT);
-		if (D3DXVec3Length(&(m_v3Eye - v3CollisionPoint)) < 3.0f * m_fTerrainCollisionRadius)
-		{
-			D3DXVECTOR3 v3NewEye = v3CollisionPoint - 3.0f * m_fTerrainCollisionRadius * m_v3Cross;
-			//printf("CameraRightToTerrain new %f > old %f", v3NewEye.z, m_v3Eye.z);
-			SetEye(v3NewEye);
-		}
-	}
-	else
-		SetCameraState(CAMERA_STATE_NORMAL);
-	*/
 }
 
 struct CameraCollisionChecker

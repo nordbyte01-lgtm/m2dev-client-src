@@ -44,33 +44,6 @@ void CActorInstance::INSTANCEBASE_Transform()
 	UpdateAttribute();
 }
 
-/*
-void CActorInstance::TEMP_Update()
-{
-	//DWORD t1=ELTimer_GetMSec();
-	OnUpdate();
-	//DWORD t2=ELTimer_GetMSec();
-	UpdateBoundingSphere();
-	//DWORD t3=ELTimer_GetMSec();
-
-#ifdef __PERFORMANCE_CHECKER__
-	{
-		static FILE* fp=fopen("perf_actor_update.txt", "w");
-
-		if (t3-t1>3)
-		{
-			fprintf(fp, "AIU.Total %d (Time %f)\n", 
-				t3-t1, ELTimer_GetMSec()/1000.0f);
-			fprintf(fp, "AIU.UP %d\n", t2-t1);
-			fprintf(fp, "AIU.UBS %d\n", t3-t2);
-			fprintf(fp, "-------------------------------- \n");
-			fflush(fp);
-		}			
-		fflush(fp);
-	}
-#endif
-}
-*/
 
 void CActorInstance::OnUpdate()
 {

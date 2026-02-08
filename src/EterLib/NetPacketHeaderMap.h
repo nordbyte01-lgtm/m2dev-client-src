@@ -7,14 +7,12 @@ class CNetworkPacketHeaderMap
 	public:
 		typedef struct SPacketType
 		{
-			SPacketType(int iSize = 0, bool bFlag = false)
+			SPacketType(int iSize = 0)
+				: iPacketSize(iSize)
 			{
-				iPacketSize = iSize;
-				isDynamicSizePacket = bFlag;
 			}
 
-			int iPacketSize;
-			bool isDynamicSizePacket;
+			int iPacketSize;	// Expected/minimum packet size (actual size from wire length field)
 		} TPacketType;
 
 	public:

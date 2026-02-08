@@ -47,72 +47,6 @@ bool DetectCollisionDynamicSphereVSDynamicSphere(const CDynamicSphereInstance & 
 	float r = c_rSphere1.fRadius+c_rSphere2.fRadius;
 	float rsq = r*r;
 
-	/*if (D3DXVec3LengthSq(&(c_rSphere1.v3Position		-c_rSphere2.v3Position		))<=rsq) return true;
-	if (D3DXVec3LengthSq(&(c_rSphere1.v3Position		-c_rSphere2.v3LastPosition	))<=rsq) return true;
-	if (D3DXVec3LengthSq(&(c_rSphere1.v3LastPosition	-c_rSphere2.v3Position		))<=rsq) return true;
-	if (D3DXVec3LengthSq(&(c_rSphere1.v3LastPosition	-c_rSphere2.v3LastPosition	))<=rsq) return true;*/
-
-	/*
-	if (square_distance_between_linesegment_and_point(
-		c_rSphere1.v3Position,
-		c_rSphere1.v3LastPosition,
-		c_rSphere2.v3Position
-		)<=rsq) return true;
-	if (square_distance_between_linesegment_and_point(
-		c_rSphere1.v3Position,
-		c_rSphere1.v3LastPosition,
-		c_rSphere2.v3LastPosition
-		)<=rsq) return true;
-	if (square_distance_between_linesegment_and_point(
-		c_rSphere2.v3Position,
-		c_rSphere2.v3LastPosition,
-		c_rSphere1.v3Position
-		)<=rsq) return true;
-	if (square_distance_between_linesegment_and_point(
-		c_rSphere2.v3Position,
-		c_rSphere2.v3LastPosition,
-		c_rSphere1.v3LastPosition
-		)<=rsq) return true;
-
-	D3DXVECTOR3 da=c_rSphere1.v3Position-c_rSphere1.v3LastPosition;
-	D3DXVECTOR3 db=c_rSphere2.v3Position-c_rSphere2.v3LastPosition;
-	D3DXVECTOR3 n;
-	float la = D3DXVec3Length(&da);
-	float lb = D3DXVec3Length(&db);
-	if (la==0||lb==0)
-	{
-		D3DXVECTOR3 vA, vB;
-		IntersectLineSegments(
-			c_rSphere1.v3LastPosition.x,c_rSphere1.v3LastPosition.y,c_rSphere1.v3LastPosition.z,
-			c_rSphere1.v3Position.x,	c_rSphere1.v3Position.y,	c_rSphere1.v3Position.z,
-			c_rSphere2.v3LastPosition.x,c_rSphere2.v3LastPosition.y,c_rSphere2.v3LastPosition.z,
-			c_rSphere2.v3Position.x,	c_rSphere2.v3Position.y,	c_rSphere2.v3Position.z,
-			false, 1.e-5f, vA.x, vA.y, vA.z, vB.x, vB.y, vB.z);
-		return (D3DXVec3LengthSq(&(vA-vB))<=r*r);
-	}
-	D3DXVECTOR3 p=c_rSphere2.v3Position - c_rSphere1.v3LastPosition;
-	D3DXVec3Cross(&n, &da, &db);
-	float from_plane = D3DXVec3Dot(&n,&p)/la/lb;
-	if (from_plane>r || from_plane<-r)
-		return false;
-	p-=(from_plane/la/lb)*n;
-	float ta = D3DXVec3Dot(&p,&da)/la/la;
-	float tb = D3DXVec3Dot(&p,&db)/lb/lb;
-
-	// FIXME 구 체크가 아니다
-
-	if (ta<0)
-		return false;
-	if (tb<0)
-		return false;
-	if (ta>1)
-		return false;
-	if (tb>1)
-		return false;
-	return true;
-
-  */
-	//*/
 	// using gpg line-collision
 
 	// AABB check
@@ -133,144 +67,14 @@ bool DetectCollisionDynamicSphereVSDynamicSphere(const CDynamicSphereInstance & 
 	if (mi4.y<mi1.y || mi2.y<mi3.y) return false;
 	if (mi4.z<mi1.z || mi2.z<mi3.z) return false;
 	
-	D3DXVECTOR3 vA, vB;/*
-	IntersectLineSegments(
-		c_rSphere1.v3LastPosition.x,c_rSphere1.v3LastPosition.y,c_rSphere1.v3LastPosition.z,
-		c_rSphere1.v3Position.x,	c_rSphere1.v3Position.y,	c_rSphere1.v3Position.z,
-		c_rSphere2.v3LastPosition.x,c_rSphere2.v3LastPosition.y,c_rSphere2.v3LastPosition.z,
-		c_rSphere2.v3Position.x,	c_rSphere2.v3Position.y,	c_rSphere2.v3Position.z,
-		false, 1.e-1f, vA.x, vA.y, vA.z, vB.x, vB.y, vB.z);*/
+	D3DXVECTOR3 vA, vB;
 	IntersectLineSegments(c_rSphere1.v3LastPosition, c_rSphere1.v3Position,
 		c_rSphere2.v3LastPosition, c_rSphere2.v3Position,
 		vA, vB);
 	const auto vvv = (vA - vB);
 	return (D3DXVec3LengthSq(&vvv)<=rsq);
-	//*/
-
-	/*
-	// NOTE : AABB 체크 할 것
-	///////////////////////////////////////////////////////////////////////////////////////////////
-	D3DXVECTOR3 v3Distance = c_rSphere1.v3Position - c_rSphere2.v3Position;
-	float fDistance = D3DXVec3Length(&v3Distance);
-	float fRadiusSummary = c_rSphere1.fRadius + c_rSphere2.fRadius;
-
-	if (fDistance < fRadiusSummary)
-		return true;
-
-	///////////////////////////////////////////////////////////////////////////////////////////////
-	D3DXVECTOR3 v3LastDistance = c_rSphere1.v3LastPosition - c_rSphere2.v3LastPosition; // A
-	D3DXVECTOR3 v3Advance = c_rSphere1.v3Advance - c_rSphere2.v3Advance;                // B
-
-	float fdotAdvanceAdvance = D3DXVec3Dot(&v3Advance, &v3Advance);
-	if (0.0f == fdotAdvanceAdvance)
-		return false;
-
-	float fdotDistanceAdvance = D3DXVec3Dot(&v3LastDistance, &v3Advance);
-	float fdotDistanceDistance = D3DXVec3Dot(&v3LastDistance, &v3LastDistance);
-	float Value1 = fdotDistanceAdvance - fdotAdvanceAdvance * (fdotDistanceDistance - (fRadiusSummary * fRadiusSummary));
-	if (Value1 < 0.0f)
-		return false;
-
-	float Value2 = (-fdotDistanceAdvance - sqrtf(Value1)) / fdotAdvanceAdvance;
-	if (Value2 < 0.0f)
-		return false;
-	if (Value2 >= 1.0f)
-		return false;
-
-	return true;*/
 }
 
-/*
-// Dynamic VS Static
-bool DetectCollisionDynamicSphereVSStaticPlane(const CDynamicSphereInstance & c_rSphere, const TPlaneData & c_rPlane)
-{
-	D3DXVECTOR3 v3SpherePosition = c_rSphere.v3Position - c_rPlane.v3Position;
-	D3DXVECTOR3 v3SphereLastPosition = c_rSphere.v3LastPosition - c_rPlane.v3Position;
-
-	float fPosition1 = D3DXVec3Dot(&c_rPlane.v3Normal, &v3SpherePosition);
-	float fPosition2 = D3DXVec3Dot(&c_rPlane.v3Normal, &v3SphereLastPosition);
-
-	if (fPosition1 >0.0f && fPosition2 < 0.0f  || fPosition1 <0.0f && fPosition2 >0.0f || (fPosition1) <= c_rSphere.fRadius && fPosition1 >= -c_rSphere.fRadius)
-	{
-		D3DXVECTOR3 v3QuadPosition1 = c_rSphere.v3Position - c_rPlane.v3QuadPosition[0];
-		D3DXVECTOR3 v3QuadPosition2 = c_rSphere.v3Position - c_rPlane.v3QuadPosition[3];
-		if (D3DXVec3Dot(&v3QuadPosition1, &c_rPlane.v3InsideVector[0]) < c_rSphere.fRadius)
-		if (D3DXVec3Dot(&v3QuadPosition1, &c_rPlane.v3InsideVector[1]) < c_rSphere.fRadius)
-		if (D3DXVec3Dot(&v3QuadPosition2, &c_rPlane.v3InsideVector[2]) < c_rSphere.fRadius)
-		if (D3DXVec3Dot(&v3QuadPosition2, &c_rPlane.v3InsideVector[3]) < c_rSphere.fRadius)
-			return true;
-
-	}
-
-	return false;
-}
-
-bool DetectCollisionDynamicSphereVSStaticSphere(const CDynamicSphereInstance & c_rSphere, const TSphereData & c_rSphereData)
-{
-	D3DXVECTOR3 v3Distance = c_rSphere.v3Position - c_rSphereData.v3Position;
-	float fDistanceSq = D3DXVec3LengthSq(&v3Distance);
-	float fRadiusSummary = c_rSphere.fRadius + c_rSphereData.fRadius;
-	if (fDistanceSq < fRadiusSummary*fRadiusSummary)
-		return true;
-	
-	//D3DXVECTOR3 v3LastDistance = c_rSphere.v3LastPosition - c_rSphereData.v3Position;
-	//if (D3DXVec3Dot(&v3LastDistance, &v3Distance) < 0.0f)
-	//	return true;
-	
-	return false;
-}
-
-bool DetectCollisionDynamicSphereVSStaticCylinder(const CDynamicSphereInstance & c_rSphere, const TCylinderData & c_rCylinderData)
-{
-	if (c_rSphere.v3Position.z + c_rSphere.fRadius < c_rCylinderData.v3Position.z)
-		return false;
-
-	if (c_rSphere.v3Position.z - c_rSphere.fRadius > c_rCylinderData.v3Position.z + c_rCylinderData.fHeight)
-		return false;
-
-	D3DXVECTOR3 v3curDistance = c_rSphere.v3Position - c_rCylinderData.v3Position;
-	float fDistance = D3DXVec3Length(&v3curDistance);
-
-	if (fDistance <= c_rSphere.fRadius + c_rCylinderData.fRadius)
-		return true;
-
-	//D3DXVECTOR3 v3lastDistance = c_rSphere.v3LastPosition - c_rCylinderData.v3Position;
-
-	//if (D3DXVec3Dot(&v3curDistance, &v3lastDistance) < 0.0f)
-	//	return true;
-
-	return false;
-}
-*/
-/*
-bool DetectCollisionDynamicSphereVSStaticBox(const TSphereInstance & c_rSphere, const TBoxData & c_rBoxData)
-{
-	return false;
-}
-*/
-// Static VS Static
-/*
-bool DetectCollisionStaticSphereVSStaticSphere(const TSphereData & c_rSphere1, const TSphereData & c_rSphere2)
-{
-	D3DXVECTOR3 v3Distance = c_rSphere1.v3Position - c_rSphere2.v3Position;
-	float fDistance = D3DXVec3Length(&v3Distance);
-
-	if (fDistance < c_rSphere1.fRadius + c_rSphere2.fRadius)
-		return true;
-
-	return false;
-}
-
-bool DetectCollisionStaticSphereVSStaticCylinder(const TSphereData & c_rSphere, const TCylinderData & c_rCylinder)
-{
-	return false;
-}
-*/
-/*bool DetectCollisionStaticSphereVSStaticBox(const TSphereData & c_rSphere, const TBoxData & c_rBox)
-{
-	return false;
-}
-*/
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool IsCWAcuteAngle(float begin, float end)
@@ -402,33 +206,3 @@ float CharacterRotationToCameraRotation(float fCharacterRotation)
 	return fmod((540.0f - fCharacterRotation), 360.0f);
 }
 
-/*
-bool DetectCollisionDynamicSphereVSStaticPlane(const TSphereInstance & c_rSphere, const TPlaneData & c_rPlane)
-{
-	D3DXVECTOR3 v3SpherePosition = c_rSphere.v3Position - c_rPlane.v3Position;
-	D3DXVECTOR3 v3SphereLastPosition = c_rSphere.v3LastPosition - c_rPlane.v3Position;
-
-	float fPosition1 = D3DXVec3Dot(&c_rPlane.v3Normal, &v3SpherePosition);
-	float fPosition2 = D3DXVec3Dot(&c_rPlane.v3Normal, &v3SphereLastPosition);
-
-	if (fPosition1 * fPosition2 < 0.0f || fabs(fPosition1) <= c_rSphere.fRadius)
-	{
-		float fT = -fPosition1 / D3DXVec3Dot(&c_rPlane.v3Normal, &c_rSphere.v3Advance);
-		D3DXVECTOR3 v3CollisionPosition = c_rSphere.v3LastPosition + c_rSphere.v3Advance * fT;
-		D3DXVECTOR3 v3QuadPosition1 = v3CollisionPosition - c_rPlane.v3BeginPosition;
-		D3DXVECTOR3 v3QuadPosition2 = v3CollisionPosition - c_rPlane.v3EndPosition;
-		D3DXVec3Normalize(&v3QuadPosition1, &v3QuadPosition1);
-		D3DXVec3Normalize(&v3QuadPosition2, &v3QuadPosition2);
-
-		if (D3DXVec3Dot(&v3QuadPosition1, &c_rPlane.v3InsideVector[0]) < 0.0f)
-		if (D3DXVec3Dot(&v3QuadPosition1, &c_rPlane.v3InsideVector[1]) < 0.0f)
-		if (D3DXVec3Dot(&v3QuadPosition2, &c_rPlane.v3InsideVector[2]) < 0.0f)
-		if (D3DXVec3Dot(&v3QuadPosition2, &c_rPlane.v3InsideVector[3]) < 0.0f)
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-*/

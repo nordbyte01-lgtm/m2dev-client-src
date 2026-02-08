@@ -7,6 +7,11 @@
 #define _PACKETDUMP
 #endif
 
+#ifdef _PACKETDUMP
+#include <unordered_map>
+#include "../UserInterface/Packet.h"
+#endif
+
 bool CNetworkStream::IsSecurityMode()
 {
 	return m_secureCipher.IsActivated();
@@ -14,58 +19,29 @@ bool CNetworkStream::IsSecurityMode()
 
 void CNetworkStream::DecryptPendingRecvData()
 {
-	int remaining = m_recvBufInputPos - m_recvBufOutputPos;
+	size_t remaining = m_recvBuf.ReadableBytes();
 	if (remaining > 0 && m_secureCipher.IsActivated())
-	{
-		m_secureCipher.DecryptInPlace(m_recvBuf + m_recvBufOutputPos, remaining);
-	}
+		m_secureCipher.DecryptInPlace(m_recvBuf.DataAt(m_recvBuf.ReadPos()), remaining);
 }
 
 void CNetworkStream::SetRecvBufferSize(int recvBufSize)
 {
-	if (m_recvBuf)
-	{
-		if (m_recvBufSize > recvBufSize)
-			return;
-
-		delete [] m_recvBuf;
-	}
-	m_recvBufSize = recvBufSize;
-	m_recvBuf = new char[m_recvBufSize];
+	m_recvBuf.Reserve(static_cast<size_t>(recvBufSize));
 }
 
 void CNetworkStream::SetSendBufferSize(int sendBufSize)
 {
-	if (m_sendBuf)
-	{
-		if (m_sendBufSize > sendBufSize)
-			return;
-
-		delete [] m_sendBuf;
-	}
-
-	m_sendBufSize = sendBufSize;
-	m_sendBuf = new char[m_sendBufSize];
+	m_sendBuf.Reserve(static_cast<size_t>(sendBufSize));
 }
 
 bool CNetworkStream::__RecvInternalBuffer()
 {
-	if (m_recvBufOutputPos > 0)
-	{
-		int recvBufDataSize = m_recvBufInputPos - m_recvBufOutputPos;
-		if (recvBufDataSize > 0)
-		{
-			memmove(m_recvBuf, m_recvBuf + m_recvBufOutputPos, recvBufDataSize);
-		}
+	m_recvBuf.EnsureWritable(4096);
 
-		m_recvBufInputPos -= m_recvBufOutputPos;
-		m_recvBufOutputPos = 0;
-	}
-
-	int restSize = m_recvBufSize - m_recvBufInputPos;
+	int restSize = static_cast<int>(m_recvBuf.WritableBytes());
 	if (restSize > 0)
 	{
-		int recvSize = recv(m_sock, m_recvBuf + m_recvBufInputPos, restSize, 0);
+		int recvSize = recv(m_sock, reinterpret_cast<char*>(m_recvBuf.WritePtr()), restSize, 0);
 
 		if (recvSize < 0)
 		{
@@ -80,16 +56,14 @@ bool CNetworkStream::__RecvInternalBuffer()
 		else
 		{
 			if (m_secureCipher.IsActivated())
-			{
-				m_secureCipher.DecryptInPlace(m_recvBuf + m_recvBufInputPos, recvSize);
-			}
-			m_recvBufInputPos += recvSize;
+				m_secureCipher.DecryptInPlace(m_recvBuf.WritePtr(), recvSize);
+
+			m_recvBuf.CommitWrite(recvSize);
 		}
 	}
 
 	return true;
 }
-
 
 bool CNetworkStream::__SendInternalBuffer()
 {
@@ -97,30 +71,18 @@ bool CNetworkStream::__SendInternalBuffer()
 	if (dataSize <= 0)
 		return true;
 
-	int sendSize = send(m_sock, m_sendBuf + m_sendBufOutputPos, dataSize, 0);
+	int sendSize = send(m_sock, reinterpret_cast<const char*>(m_sendBuf.ReadPtr()), dataSize, 0);
 	if (sendSize < 0)
-		return false;
-
-	m_sendBufOutputPos += sendSize;
-	__PopSendBuffer();
-
-	return true;
-}
-
-void CNetworkStream::__PopSendBuffer()
-{
-	if (m_sendBufOutputPos <= 0)
-		return;
-
-	int sendBufDataSize = m_sendBufInputPos - m_sendBufOutputPos;
-
-	if (sendBufDataSize > 0)
 	{
-		memmove(m_sendBuf, m_sendBuf + m_sendBufOutputPos, sendBufDataSize);
+		int err = WSAGetLastError();
+		TraceError("__SendInternalBuffer: send() failed, sock=%llu, dataSize=%d, error=%d",
+			(unsigned long long)m_sock, dataSize, err);
+		return false;
 	}
 
-	m_sendBufInputPos = sendBufDataSize;
-	m_sendBufOutputPos = 0;
+	m_sendBuf.Discard(sendSize);
+
+	return true;
 }
 
 #pragma warning(push)
@@ -163,7 +125,7 @@ void CNetworkStream::Process()
 		return;
 	}
 
-	if (FD_ISSET(m_sock, &fdsSend) && (m_sendBufInputPos > m_sendBufOutputPos))
+	if (FD_ISSET(m_sock, &fdsSend) && (m_sendBuf.ReadableBytes() > 0))
 	{
 		if (!__SendInternalBuffer())
 		{
@@ -206,24 +168,20 @@ void CNetworkStream::Disconnect()
 
 void CNetworkStream::Clear()
 {
-	if (m_sock == INVALID_SOCKET)
-		return;
-
+	// Always clean cipher state (erase key material promptly)
 	m_secureCipher.CleanUp();
 
-	closesocket(m_sock);
-	m_sock = INVALID_SOCKET;
+	if (m_sock != INVALID_SOCKET)
+	{
+		closesocket(m_sock);
+		m_sock = INVALID_SOCKET;
+	}
 
 	m_isOnline = false;
 	m_connectLimitTime = 0;
 
-	m_recvBufInputPos = 0;
-	m_recvBufOutputPos = 0;
-
-	m_sendBufInputPos = 0;
-	m_sendBufOutputPos = 0;
-
-	m_SequenceGenerator.seed(SEQUENCE_SEED);
+	m_recvBuf.Clear();
+	m_sendBuf.Clear();
 }
 
 bool CNetworkStream::Connect(const CNetworkAddress& c_rkNetAddr, int limitSec)
@@ -294,251 +252,229 @@ bool CNetworkStream::Connect(const char* c_szAddr, int port, int /*limitSec*/)
 
 void CNetworkStream::ClearRecvBuffer()
 {
-	m_recvBufOutputPos = m_recvBufInputPos = 0;
+	m_recvBuf.Clear();
 }
 
 int CNetworkStream::GetRecvBufferSize()
 {
-	return m_recvBufInputPos - m_recvBufOutputPos;
+	return static_cast<int>(m_recvBuf.ReadableBytes());
 }
 
 bool CNetworkStream::Peek(int size)
 {
-	if (GetRecvBufferSize() < size)
-		return false;
-
-	return true;
+	return m_recvBuf.HasBytes(static_cast<size_t>(size));
 }
 
-bool CNetworkStream::Peek(int size, char * pDestBuf)
+bool CNetworkStream::Peek(int size, char* pDestBuf)
 {
-	if (GetRecvBufferSize() < size)
-		return false;
-
-	memcpy(pDestBuf, m_recvBuf + m_recvBufOutputPos, size);
-	return true;
+	return m_recvBuf.Peek(pDestBuf, static_cast<size_t>(size));
 }
-
 
 #ifdef _PACKETDUMP
-const char * GetSendHeaderName(BYTE header)
+
+static const char* GetHeaderName(uint16_t header)
 {
-	static bool b = false;
-	static std::string stringList[UCHAR_MAX+1];
-	if (b==false)
-	{
-		for (DWORD i = 0; i < UCHAR_MAX+1; i++)
-		{
-			char buf[10];
-			sprintf(buf,"%d",i);
-			stringList[i] = buf;
-		}
-		stringList[2] = "HEADER_CG_ATTACK";
-		stringList[3] = "HEADER_CG_CHAT";
-		stringList[4] = "HEADER_CG_PLAYER_CREATE";
-		stringList[5] = "HEADER_CG_PLAYER_DESTROY";
-		stringList[6] = "HEADER_CG_PLAYER_SELECT";
-		stringList[7] = "HEADER_CG_CHARACTER_MOVE";
-		stringList[8] = "HEADER_CG_SYNC_POSITION";
-		stringList[9] = "HEADER_CG_DIRECT_ENTER";
-		stringList[10] = "HEADER_CG_ENTERGAME";
-		stringList[11] = "HEADER_CG_ITEM_USE";
-		stringList[12] = "HEADER_CG_ITEM_DROP";
-		stringList[13] = "HEADER_CG_ITEM_MOVE";
-		stringList[15] = "HEADER_CG_ITEM_PICKUP";
-		stringList[16] = "HEADER_CG_QUICKSLOT_ADD";
-		stringList[17] = "HEADER_CG_QUICKSLOT_DEL";
-		stringList[18] = "HEADER_CG_QUICKSLOT_SWAP";
-		stringList[19] = "HEADER_CG_WHISPER";
-		stringList[20] = "HEADER_CG_ITEM_DROP2";
-		stringList[26] = "HEADER_CG_ON_CLICK";
-		stringList[27] = "HEADER_CG_EXCHANGE";
-		stringList[28] = "HEADER_CG_CHARACTER_POSITION";
-		stringList[29] = "HEADER_CG_SCRIPT_ANSWER";
-		stringList[30] = "HEADER_CG_QUEST_INPUT_STRING";
-		stringList[31] = "HEADER_CG_QUEST_CONFIRM";
-		stringList[41] = "HEADER_CG_PVP";
-		stringList[50] = "HEADER_CG_SHOP";
-		stringList[51] = "HEADER_CG_FLY_TARGETING";
-		stringList[52] = "HEADER_CG_USE_SKILL";
-		stringList[53] = "HEADER_CG_ADD_FLY_TARGETING";
-		stringList[54] = "HEADER_CG_SHOOT";
-		stringList[55] = "HEADER_CG_MYSHOP";
-		stringList[60] = "HEADER_CG_ITEM_USE_TO_ITEM";
-		stringList[61] = "HEADER_CG_TARGET";
-		stringList[65] = "HEADER_CG_WARP";
-		stringList[66] = "HEADER_CG_SCRIPT_BUTTON";
-		stringList[67] = "HEADER_CG_MESSENGER";
-		stringList[69] = "HEADER_CG_MALL_CHECKOUT";
-		stringList[70] = "HEADER_CG_SAFEBOX_CHECKIN";
-		stringList[71] = "HEADER_CG_SAFEBOX_CHECKOUT";
-		stringList[72] = "HEADER_CG_PARTY_INVITE";
-		stringList[73] = "HEADER_CG_PARTY_INVITE_ANSWER";
-		stringList[74] = "HEADER_CG_PARTY_REMOVE";
-		stringList[75] = "HEADER_CG_PARTY_SET_STATE";
-		stringList[76] = "HEADER_CG_PARTY_USE_SKILL";
-		stringList[77] = "HEADER_CG_SAFEBOX_ITEM_MOVE";
-		stringList[78] = "HEADER_CG_PARTY_PARAMETER";
-		stringList[80] = "HEADER_CG_GUILD";
-		stringList[81] = "HEADER_CG_ANSWER_MAKE_GUILD";
-		stringList[82] = "HEADER_CG_FISHING";
-		stringList[83] = "HEADER_CG_GIVE_ITEM";
-		stringList[90] = "HEADER_CG_EMPIRE";
-		stringList[96] = "HEADER_CG_REFINE";
-		stringList[100] = "HEADER_CG_MARK_LOGIN";
-		stringList[101] = "HEADER_CG_MARK_CRCLIST";
-		stringList[102] = "HEADER_CG_MARK_UPLOAD";
-		stringList[103] = "HEADER_CG_CRC_REPORT";
-		stringList[105] = "HEADER_CG_HACK";
-		stringList[106] = "HEADER_CG_CHANGE_NAME";
-		stringList[107] = "HEADER_CG_SMS";
-		stringList[108] = "HEADER_CG_MATRIX_CARD";
-		stringList[109] = "HEADER_CG_LOGIN2";
-		stringList[110] = "HEADER_CG_DUNGEON";
-		stringList[111] = "HEADER_CG_LOGIN3";
-		stringList[112] = "HEADER_CG_GUILD_SYMBOL_UPLOAD";
-		stringList[113] = "HEADER_CG_GUILD_SYMBOL_CRC";
-		stringList[114] = "HEADER_CG_SCRIPT_SELECT_ITEM";
-		stringList[0xf9] = "HEADER_CG_KEY_RESPONSE";
-		stringList[0xfc] = "HEADER_CG_TIME_SYNC";
-		stringList[0xfd] = "HEADER_CG_CLIENT_VERSION";
-		stringList[0xfe] = "HEADER_CG_PONG";
-		stringList[0xff] = "HEADER_CG_HANDSHAKE";
-	}
-	return stringList[header].c_str();
-}
+	static const std::unordered_map<uint16_t, const char*> s_headerNames = {
+		// Control
+		{ CG::PONG,               "CG_PONG" },
+		{ GC::PING,               "GC_PING" },
+		{ GC::PHASE,              "GC_PHASE" },
+		{ CG::KEY_RESPONSE,       "CG_KEY_RESPONSE" },
+		{ GC::KEY_CHALLENGE,      "GC_KEY_CHALLENGE" },
+		{ GC::KEY_COMPLETE,       "GC_KEY_COMPLETE" },
+		{ CG::CLIENT_VERSION,     "CG_CLIENT_VERSION" },
+		{ CG::STATE_CHECKER,      "CG_STATE_CHECKER" },
+		{ GC::RESPOND_CHANNELSTATUS, "GC_RESPOND_CHANNELSTATUS" },
+		{ CG::TEXT,               "CG_TEXT" },
+		// Authentication
+		{ CG::LOGIN2,             "CG_LOGIN2" },
+		{ CG::LOGIN3,             "CG_LOGIN3" },
+		{ CG::LOGIN_SECURE,       "CG_LOGIN_SECURE" },
+		{ GC::LOGIN_SUCCESS3,     "GC_LOGIN_SUCCESS3" },
+		{ GC::LOGIN_SUCCESS4,     "GC_LOGIN_SUCCESS4" },
+		{ GC::LOGIN_FAILURE,      "GC_LOGIN_FAILURE" },
+		{ GC::LOGIN_KEY,          "GC_LOGIN_KEY" },
+		{ GC::AUTH_SUCCESS,       "GC_AUTH_SUCCESS" },
+		{ GC::EMPIRE,             "GC_EMPIRE" },
+		{ CG::EMPIRE,             "CG_EMPIRE" },
+		{ CG::CHANGE_NAME,        "CG_CHANGE_NAME" },
+		{ GC::CHANGE_NAME,        "GC_CHANGE_NAME" },
+		// Character
+		{ CG::CHARACTER_CREATE,   "CG_CHARACTER_CREATE" },
+		{ CG::CHARACTER_DELETE,   "CG_CHARACTER_DELETE" },
+		{ CG::CHARACTER_SELECT,   "CG_CHARACTER_SELECT" },
+		{ CG::ENTERGAME,          "CG_ENTERGAME" },
+		{ GC::CHARACTER_ADD,      "GC_CHARACTER_ADD" },
+		{ GC::CHARACTER_ADD2,     "GC_CHARACTER_ADD2" },
+		{ GC::CHAR_ADDITIONAL_INFO, "GC_CHAR_ADDITIONAL_INFO" },
+		{ GC::CHARACTER_DEL,      "GC_CHARACTER_DEL" },
+		{ GC::CHARACTER_UPDATE,   "GC_CHARACTER_UPDATE" },
+		{ GC::CHARACTER_UPDATE2,  "GC_CHARACTER_UPDATE2" },
+		{ GC::CHARACTER_POSITION, "GC_CHARACTER_POSITION" },
+		{ GC::PLAYER_CREATE_SUCCESS, "GC_PLAYER_CREATE_SUCCESS" },
+		{ GC::PLAYER_CREATE_FAILURE, "GC_PLAYER_CREATE_FAILURE" },
+		{ GC::PLAYER_DELETE_SUCCESS, "GC_PLAYER_DELETE_SUCCESS" },
+		{ GC::PLAYER_DELETE_WRONG_SOCIAL_ID, "GC_PLAYER_DELETE_WRONG_SOCIAL_ID" },
+		{ GC::MAIN_CHARACTER,     "GC_MAIN_CHARACTER" },
+		{ GC::PLAYER_POINTS,      "GC_PLAYER_POINTS" },
+		{ GC::PLAYER_POINT_CHANGE, "GC_PLAYER_POINT_CHANGE" },
+		{ GC::STUN,               "GC_STUN" },
+		{ GC::DEAD,               "GC_DEAD" },
+		{ GC::CHANGE_SPEED,       "GC_CHANGE_SPEED" },
+		{ GC::WALK_MODE,          "GC_WALK_MODE" },
+		{ GC::SKILL_LEVEL,        "GC_SKILL_LEVEL" },
+		{ GC::SKILL_LEVEL_NEW,    "GC_SKILL_LEVEL_NEW" },
+		{ GC::SKILL_COOLTIME_END, "GC_SKILL_COOLTIME_END" },
+		{ GC::CHANGE_SKILL_GROUP, "GC_CHANGE_SKILL_GROUP" },
+		{ GC::VIEW_EQUIP,         "GC_VIEW_EQUIP" },
+		// Movement
+		{ CG::MOVE,               "CG_MOVE" },
+		{ GC::MOVE,               "GC_MOVE" },
+		{ CG::SYNC_POSITION,      "CG_SYNC_POSITION" },
+		{ GC::SYNC_POSITION,      "GC_SYNC_POSITION" },
+		{ CG::WARP,               "CG_WARP" },
+		{ GC::WARP,               "GC_WARP" },
+		{ GC::MOTION,             "GC_MOTION" },
+		{ GC::DIG_MOTION,         "GC_DIG_MOTION" },
+		// Combat
+		{ CG::ATTACK,             "CG_ATTACK" },
+		{ CG::USE_SKILL,          "CG_USE_SKILL" },
+		{ CG::SHOOT,              "CG_SHOOT" },
+		{ CG::FLY_TARGETING,      "CG_FLY_TARGETING" },
+		{ CG::ADD_FLY_TARGETING,  "CG_ADD_FLY_TARGETING" },
+		{ GC::DAMAGE_INFO,        "GC_DAMAGE_INFO" },
+		{ GC::FLY_TARGETING,      "GC_FLY_TARGETING" },
+		{ GC::ADD_FLY_TARGETING,  "GC_ADD_FLY_TARGETING" },
+		{ GC::CREATE_FLY,         "GC_CREATE_FLY" },
+		{ GC::PVP,                "GC_PVP" },
+		{ GC::DUEL_START,         "GC_DUEL_START" },
+		// Items
+		{ CG::ITEM_USE,           "CG_ITEM_USE" },
+		{ CG::ITEM_DROP,          "CG_ITEM_DROP" },
+		{ CG::ITEM_DROP2,         "CG_ITEM_DROP2" },
+		{ CG::ITEM_MOVE,          "CG_ITEM_MOVE" },
+		{ CG::ITEM_PICKUP,        "CG_ITEM_PICKUP" },
+		{ CG::ITEM_USE_TO_ITEM,   "CG_ITEM_USE_TO_ITEM" },
+		{ CG::ITEM_GIVE,          "CG_ITEM_GIVE" },
+		{ CG::EXCHANGE,           "CG_EXCHANGE" },
+		{ CG::QUICKSLOT_ADD,      "CG_QUICKSLOT_ADD" },
+		{ CG::QUICKSLOT_DEL,      "CG_QUICKSLOT_DEL" },
+		{ CG::QUICKSLOT_SWAP,     "CG_QUICKSLOT_SWAP" },
+		{ CG::REFINE,             "CG_REFINE" },
+		{ CG::DRAGON_SOUL_REFINE, "CG_DRAGON_SOUL_REFINE" },
+		{ GC::ITEM_DEL,           "GC_ITEM_DEL" },
+		{ GC::ITEM_SET,           "GC_ITEM_SET" },
+		{ GC::ITEM_USE,           "GC_ITEM_USE" },
+		{ GC::ITEM_DROP,          "GC_ITEM_DROP" },
+		{ GC::ITEM_UPDATE,        "GC_ITEM_UPDATE" },
+		{ GC::ITEM_GROUND_ADD,    "GC_ITEM_GROUND_ADD" },
+		{ GC::ITEM_GROUND_DEL,    "GC_ITEM_GROUND_DEL" },
+		{ GC::ITEM_OWNERSHIP,     "GC_ITEM_OWNERSHIP" },
+		{ GC::ITEM_GET,           "GC_ITEM_GET" },
+		{ GC::QUICKSLOT_ADD,      "GC_QUICKSLOT_ADD" },
+		{ GC::QUICKSLOT_DEL,      "GC_QUICKSLOT_DEL" },
+		{ GC::QUICKSLOT_SWAP,     "GC_QUICKSLOT_SWAP" },
+		{ GC::EXCHANGE,           "GC_EXCHANGE" },
+		{ GC::REFINE_INFORMATION, "GC_REFINE_INFORMATION" },
+		{ GC::DRAGON_SOUL_REFINE, "GC_DRAGON_SOUL_REFINE" },
+		// Chat
+		{ CG::CHAT,               "CG_CHAT" },
+		{ CG::WHISPER,            "CG_WHISPER" },
+		{ GC::CHAT,               "GC_CHAT" },
+		{ GC::WHISPER,            "GC_WHISPER" },
+		// Social
+		{ CG::PARTY_INVITE,       "CG_PARTY_INVITE" },
+		{ CG::PARTY_INVITE_ANSWER, "CG_PARTY_INVITE_ANSWER" },
+		{ CG::PARTY_REMOVE,       "CG_PARTY_REMOVE" },
+		{ CG::PARTY_SET_STATE,    "CG_PARTY_SET_STATE" },
+		{ CG::PARTY_USE_SKILL,    "CG_PARTY_USE_SKILL" },
+		{ CG::PARTY_PARAMETER,    "CG_PARTY_PARAMETER" },
+		{ GC::PARTY_INVITE,       "GC_PARTY_INVITE" },
+		{ GC::PARTY_ADD,          "GC_PARTY_ADD" },
+		{ GC::PARTY_UPDATE,       "GC_PARTY_UPDATE" },
+		{ GC::PARTY_REMOVE,       "GC_PARTY_REMOVE" },
+		{ GC::PARTY_LINK,         "GC_PARTY_LINK" },
+		{ GC::PARTY_UNLINK,       "GC_PARTY_UNLINK" },
+		{ GC::PARTY_PARAMETER,    "GC_PARTY_PARAMETER" },
+		{ CG::GUILD,              "CG_GUILD" },
+		{ CG::ANSWER_MAKE_GUILD,  "CG_ANSWER_MAKE_GUILD" },
+		{ CG::GUILD_SYMBOL_UPLOAD, "CG_GUILD_SYMBOL_UPLOAD" },
+		{ CG::SYMBOL_CRC,         "CG_SYMBOL_CRC" },
+		{ GC::GUILD,              "GC_GUILD" },
+		{ GC::REQUEST_MAKE_GUILD, "GC_REQUEST_MAKE_GUILD" },
+		{ GC::SYMBOL_DATA,        "GC_SYMBOL_DATA" },
+		{ CG::MESSENGER,          "CG_MESSENGER" },
+		{ GC::MESSENGER,          "GC_MESSENGER" },
+		{ GC::LOVER_INFO,         "GC_LOVER_INFO" },
+		{ GC::LOVE_POINT_UPDATE,  "GC_LOVE_POINT_UPDATE" },
+		// Shop / Trade
+		{ CG::SHOP,               "CG_SHOP" },
+		{ CG::MYSHOP,             "CG_MYSHOP" },
+		{ GC::SHOP,               "GC_SHOP" },
+		{ GC::SHOP_SIGN,          "GC_SHOP_SIGN" },
+		{ CG::SAFEBOX_CHECKIN,    "CG_SAFEBOX_CHECKIN" },
+		{ CG::SAFEBOX_CHECKOUT,   "CG_SAFEBOX_CHECKOUT" },
+		{ CG::SAFEBOX_ITEM_MOVE,  "CG_SAFEBOX_ITEM_MOVE" },
+		{ GC::SAFEBOX_SET,        "GC_SAFEBOX_SET" },
+		{ GC::SAFEBOX_DEL,        "GC_SAFEBOX_DEL" },
+		{ GC::SAFEBOX_WRONG_PASSWORD, "GC_SAFEBOX_WRONG_PASSWORD" },
+		{ GC::SAFEBOX_SIZE,       "GC_SAFEBOX_SIZE" },
+		{ GC::SAFEBOX_MONEY_CHANGE, "GC_SAFEBOX_MONEY_CHANGE" },
+		{ CG::MALL_CHECKOUT,      "CG_MALL_CHECKOUT" },
+		{ GC::MALL_OPEN,          "GC_MALL_OPEN" },
+		{ GC::MALL_SET,           "GC_MALL_SET" },
+		{ GC::MALL_DEL,           "GC_MALL_DEL" },
+		// Quest
+		{ CG::SCRIPT_ANSWER,      "CG_SCRIPT_ANSWER" },
+		{ CG::SCRIPT_BUTTON,      "CG_SCRIPT_BUTTON" },
+		{ CG::SCRIPT_SELECT_ITEM, "CG_SCRIPT_SELECT_ITEM" },
+		{ CG::QUEST_INPUT_STRING, "CG_QUEST_INPUT_STRING" },
+		{ CG::QUEST_CONFIRM,      "CG_QUEST_CONFIRM" },
+		{ CG::QUEST_CANCEL,       "CG_QUEST_CANCEL" },
+		{ GC::SCRIPT,             "GC_SCRIPT" },
+		{ GC::QUEST_CONFIRM,      "GC_QUEST_CONFIRM" },
+		{ GC::QUEST_INFO,         "GC_QUEST_INFO" },
+		// UI / Effects
+		{ CG::TARGET,             "CG_TARGET" },
+		{ CG::ON_CLICK,           "CG_ON_CLICK" },
+		{ GC::TARGET,             "GC_TARGET" },
+		{ GC::TARGET_UPDATE,      "GC_TARGET_UPDATE" },
+		{ GC::TARGET_DELETE,      "GC_TARGET_DELETE" },
+		{ GC::TARGET_CREATE_NEW,  "GC_TARGET_CREATE_NEW" },
+		{ GC::AFFECT_ADD,         "GC_AFFECT_ADD" },
+		{ GC::AFFECT_REMOVE,      "GC_AFFECT_REMOVE" },
+		{ GC::SEPCIAL_EFFECT,     "GC_SPECIAL_EFFECT" },
+		{ GC::SPECIFIC_EFFECT,    "GC_SPECIFIC_EFFECT" },
+		{ GC::MOUNT,              "GC_MOUNT" },
+		{ GC::OWNERSHIP,          "GC_OWNERSHIP" },
+		{ GC::NPC_POSITION,       "GC_NPC_POSITION" },
+		{ CG::CHARACTER_POSITION, "CG_CHARACTER_POSITION" },
+		// World
+		{ CG::FISHING,            "CG_FISHING" },
+		{ CG::DUNGEON,            "CG_DUNGEON" },
+		{ CG::HACK,               "CG_HACK" },
+		{ GC::FISHING,            "GC_FISHING" },
+		{ GC::DUNGEON,            "GC_DUNGEON" },
+		{ GC::LAND_LIST,          "GC_LAND_LIST" },
+		{ GC::TIME,               "GC_TIME" },
+		{ GC::CHANNEL,            "GC_CHANNEL" },
+		{ GC::MARK_UPDATE,        "GC_MARK_UPDATE" },
+		// Guild Marks
+		{ CG::MARK_LOGIN,         "CG_MARK_LOGIN" },
+		{ CG::MARK_CRCLIST,       "CG_MARK_CRCLIST" },
+		{ CG::MARK_UPLOAD,        "CG_MARK_UPLOAD" },
+		{ CG::MARK_IDXLIST,       "CG_MARK_IDXLIST" },
+		{ GC::MARK_BLOCK,         "GC_MARK_BLOCK" },
+		{ GC::MARK_IDXLIST,       "GC_MARK_IDXLIST" },
+	};
 
-const char * GetRecvHeaderName(BYTE header)
-{
-	static bool b = false;
-	static std::string stringList[UCHAR_MAX+1];
-	if (b==false)
-	{
-		for (DWORD i = 0; i < UCHAR_MAX+1; i++)
-		{
-			char buf[10];
-			sprintf(buf,"%d",i);
-			stringList[i] = buf;
-		}
-		stringList[1] = "HEADER_GC_CHARACTER_ADD";
-		stringList[2] = "HEADER_GC_CHARACTER_DEL";
-		stringList[3] = "HEADER_GC_CHARACTER_MOVE";
-		stringList[4] = "HEADER_GC_CHAT";
-		stringList[5] = "HEADER_GC_SYNC_POSITION";
-		stringList[6] = "HEADER_GC_LOGIN_SUCCESS";
-		stringList[7] = "HEADER_GC_LOGIN_FAILURE";
-		stringList[8] = "HEADER_GC_PLAYER_CREATE_SUCCESS";
-		stringList[9] = "HEADER_GC_PLAYER_CREATE_FAILURE";
-		stringList[10] = "HEADER_GC_PLAYER_DELETE_SUCCESS";
-		stringList[11] = "HEADER_GC_PLAYER_DELETE_WRONG_SOCIAL_ID";
+	auto it = s_headerNames.find(header);
+	if (it != s_headerNames.end())
+		return it->second;
 
-		stringList[13] = "HEADER_GC_STUN";
-		stringList[14] = "HEADER_GC_DEAD";
-		stringList[15] = "HEADER_GC_MAIN_CHARACTER";
-		stringList[16] = "HEADER_GC_PLAYER_POINTS";
-		stringList[17] = "HEADER_GC_PLAYER_POINT_CHANGE";
-		stringList[18] = "HEADER_GC_CHANGE_SPEED";
-		stringList[19] = "HEADER_GC_CHARACTER_UPDATE";
-		stringList[20] = "HEADER_GC_ITEM_DEL";
-		stringList[21] = "HEADER_GC_ITEM_SET";
-		stringList[22] = "HEADER_GC_ITEM_USE";
-		stringList[23] = "HEADER_GC_ITEM_DROP";
-		stringList[25] = "HEADER_GC_ITEM_UPDATE";
-		stringList[26] = "HEADER_GC_ITEM_GROUND_ADD";
-		stringList[27] = "HEADER_GC_ITEM_GROUND_DEL";
-		stringList[28] = "HEADER_GC_QUICKSLOT_ADD";
-		stringList[29] = "HEADER_GC_QUICKSLOT_DEL";
-		stringList[30] = "HEADER_GC_QUICKSLOT_SWAP";
-		stringList[31] = "HEADER_GC_ITEM_OWNERSHIP";
-		stringList[33] = "HEADER_GC_ITEM_UNBIND_TIME";
-		stringList[34] = "HEADER_GC_WHISPER";
-		stringList[35] = "HEADER_GC_ALERT";
-		stringList[36] = "HEADER_GC_MOTION";
-		stringList[38] = "HEADER_GC_SHOP";
-		stringList[39] = "HEADER_GC_SHOP_SIGN";
-		stringList[41] = "HEADER_GC_PVP";
-		stringList[42] = "HEADER_GC_EXCHANGE";
-		stringList[43] = "HEADER_GC_CHARACTER_POSITION";
-		stringList[44] = "HEADER_GC_PING";
-		stringList[45] = "HEADER_GC_SCRIPT";
-		stringList[46] = "HEADER_GC_QUEST_CONFIRM";
-
-		stringList[61] = "HEADER_GC_MOUNT";
-		stringList[62] = "HEADER_GC_OWNERSHIP";
-		stringList[63] = "HEADER_GC_TARGET";
-		stringList[65] = "HEADER_GC_WARP";
-		stringList[69] = "HEADER_GC_ADD_FLY_TARGETING";
-
-		stringList[70] = "HEADER_GC_CREATE_FLY";
-		stringList[71] = "HEADER_GC_FLY_TARGETING";
-		stringList[72] = "HEADER_GC_SKILL_LEVEL";
-		stringList[73] = "HEADER_GC_SKILL_COOLTIME_END";
-		stringList[74] = "HEADER_GC_MESSENGER";
-		stringList[75] = "HEADER_GC_GUILD";
-		stringList[76] = "HEADER_GC_SKILL_LEVEL_NEW";
-		stringList[77] = "HEADER_GC_PARTY_INVITE";
-		stringList[78] = "HEADER_GC_PARTY_ADD";
-		stringList[79] = "HEADER_GC_PARTY_UPDATE";
-		stringList[80] = "HEADER_GC_PARTY_REMOVE";
-		stringList[81] = "HEADER_GC_QUEST_INFO";
-		stringList[82] = "HEADER_GC_REQUEST_MAKE_GUILD";
-		stringList[83] = "HEADER_GC_PARTY_PARAMETER";
-		stringList[84] = "HEADER_GC_SAFEBOX_MONEY_CHANGE";
-		stringList[85] = "HEADER_GC_SAFEBOX_SET";
-		stringList[86] = "HEADER_GC_SAFEBOX_DEL";
-		stringList[87] = "HEADER_GC_SAFEBOX_WRONG_PASSWORD";
-		stringList[88] = "HEADER_GC_SAFEBOX_SIZE";
-		stringList[89] = "HEADER_GC_FISHING";
-		stringList[90] = "HEADER_GC_EMPIRE";
-		stringList[91] = "HEADER_GC_PARTY_LINK";
-		stringList[92] = "HEADER_GC_PARTY_UNLINK";
-
-		stringList[95] = "HEADER_GC_REFINE_INFORMATION";
-		stringList[96] = "HEADER_GC_OBSERVER_ADD";
-		stringList[97] = "HEADER_GC_OBSERVER_REMOVE";
-		stringList[98] = "HEADER_GC_OBSERVER_MOVE";
-		stringList[99] = "HEADER_GC_VIEW_EQUIP";
-		stringList[100] = "HEADER_GC_MARK_BLOCK";
-		stringList[101] = "HEADER_GC_MARK_DIFF_DATA";
-
-		stringList[106] = "HEADER_GC_TIME";
-		stringList[107] = "HEADER_GC_CHANGE_NAME";
-		stringList[110] = "HEADER_GC_DUNGEON";
-		stringList[111] = "HEADER_GC_WALK_MODE";
-		stringList[112] = "HEADER_GC_CHANGE_SKILL_GROUP";
-		stringList[113] = "HEADER_GC_MAIN_CHARACTER_NEW";
-		stringList[114] = "HEADER_GC_USE_POTION";
-		stringList[115] = "HEADER_GC_NPC_POSITION";
-		stringList[116] = "HEADER_GC_MATRIX_CARD";
-		stringList[117] = "HEADER_GC_CHARACTER_UPDATE2";
-		stringList[118] = "HEADER_GC_LOGIN_KEY";
-		stringList[119] = "HEADER_GC_REFINE_INFORMATION_NEW";
-		stringList[120] = "HEADER_GC_CHARACTER_ADD2";
-		stringList[121] = "HEADER_GC_CHANNEL";
-		stringList[122] = "HEADER_GC_MALL_OPEN";
-		stringList[123] = "HEADER_GC_TARGET_UPDATE";
-		stringList[124] = "HEADER_GC_TARGET_DELETE";
-		stringList[125] = "HEADER_GC_TARGET_CREATE_NEW";
-		stringList[126] = "HEADER_GC_AFFECT_ADD";
-		stringList[127] = "HEADER_GC_AFFECT_REMOVE";
-		stringList[128] = "HEADER_GC_MALL_SET";
-		stringList[129] = "HEADER_GC_MALL_DEL";
-		stringList[130] = "HEADER_GC_LAND_LIST";
-		stringList[131] = "HEADER_GC_LOVER_INFO";
-		stringList[132] = "HEADER_GC_LOVE_POINT_UPDATE";
-		stringList[133] = "HEADER_GC_GUILD_SYMBOL_DATA";
-		stringList[134] = "HEADER_GC_DIG_MOTION";
-		stringList[135] = "HEADER_GC_DAMAGE_INFO";
-		stringList[136] = "HEADER_GC_CHAR_ADDITIONAL_INFO";
-		stringList[150] = "HEADER_GC_AUTH_SUCCESS";
-		stringList[0xf7] = "HEADER_GC_KEY_COMPLETE";
-		stringList[0xf8] = "HEADER_GC_KEY_CHALLENGE";
-		stringList[0xfc] = "HEADER_GC_HANDSHAKE_OK";
-		stringList[0xfd] = "HEADER_GC_PHASE";
-		stringList[0xfe] = "HEADER_GC_BINDUDP";
-		stringList[0xff] = "HEADER_GC_HANDSHAKE";
-	}
-	return stringList[header].c_str();
+	static thread_local char buf[16];
+	snprintf(buf, sizeof(buf), "0x%04X", header);
+	return buf;
 }
 
 #endif
@@ -548,7 +484,7 @@ bool CNetworkStream::Recv(int size)
 	if (!Peek(size))
 		return false;
 
-	m_recvBufOutputPos += size;
+	m_recvBuf.Discard(static_cast<size_t>(size));
 	return true;
 }
 
@@ -575,46 +511,61 @@ bool CNetworkStream::Recv(int size, char * pDestBuf)
 		return false;
 
 #ifdef _PACKETDUMP
-	if (*pDestBuf != 0)
+	if (size >= 2)
 	{
-		const auto kHeader = *pDestBuf;
-		TraceError("RECV< %s %u(0x%X) (%d)", GetRecvHeaderName(kHeader), kHeader, kHeader, size);
+		const uint16_t kHeader = *reinterpret_cast<const uint16_t*>(pDestBuf);
+		TraceError("RECV< %s 0x%04X (%d bytes)", GetHeaderName(kHeader), kHeader, size);
 
 		const auto contents = dump_hex(reinterpret_cast<const uint8_t*>(pDestBuf), size);
 		TraceError("%s", contents.c_str());
 	}
 #endif
 
-	m_recvBufOutputPos += size;
+	m_recvBuf.Discard(static_cast<size_t>(size));
 	return true;
 }
 
 int CNetworkStream::__GetSendBufferSize()
 {
-	return m_sendBufInputPos - m_sendBufOutputPos;
+	return static_cast<int>(m_sendBuf.ReadableBytes());
 }
-
 
 bool CNetworkStream::Send(int size, const char * pSrcBuf)
 {
-	int sendBufRestSize = m_sendBufSize - m_sendBufInputPos;
-	if ((size + 1) > sendBufRestSize)
-		return false;
-
-	memcpy(m_sendBuf + m_sendBufInputPos, pSrcBuf, size);
-
-	if (m_secureCipher.IsActivated())
+	// Track packet sends: detect new packet start by checking [header:2][length:2] framing
+	if (size >= 4)
 	{
-		m_secureCipher.EncryptInPlace(m_sendBuf + m_sendBufInputPos, size);
+		const uint16_t wHeader = *reinterpret_cast<const uint16_t*>(pSrcBuf);
+		const uint16_t wLength = *reinterpret_cast<const uint16_t*>(pSrcBuf + 2);
+
+		if (wHeader != 0 && wLength >= 4)
+		{
+			auto& e = m_aSentPacketLog[m_dwSentPacketSeq % SENT_PACKET_LOG_SIZE];
+			e.seq = m_dwSentPacketSeq;
+			e.header = wHeader;
+			e.length = wLength;
+			m_dwSentPacketSeq++;
+		}
 	}
 
-	m_sendBufInputPos += size;
+	m_sendBuf.EnsureWritable(static_cast<size_t>(size));
+
+	// Copy data to send buffer
+	std::memcpy(m_sendBuf.WritePtr(), pSrcBuf, static_cast<size_t>(size));
+
+	// Encrypt in-place before committing
+	if (m_secureCipher.IsActivated())
+	{
+		m_secureCipher.EncryptInPlace(m_sendBuf.WritePtr(), size);
+	}
+
+	m_sendBuf.CommitWrite(static_cast<size_t>(size));
 
 #ifdef _PACKETDUMP
-	if (*pSrcBuf != 0)
+	if (size >= 2)
 	{
-		const auto kHeader = *pSrcBuf;
-		TraceError("SEND> %s %u(0x%X) (%d)", GetSendHeaderName(kHeader), kHeader, kHeader, size);
+		const uint16_t kHeader = *reinterpret_cast<const uint16_t*>(pSrcBuf);
+		TraceError("SEND> %s 0x%04X (%d bytes)", GetHeaderName(kHeader), kHeader, size);
 
 		const auto contents = dump_hex(reinterpret_cast<const uint8_t*>(pSrcBuf), size);
 		TraceError("%s", contents.c_str());
@@ -652,25 +603,6 @@ bool CNetworkStream::IsOnline()
 	return m_isOnline;
 }
 
-void CNetworkStream::SetPacketSequenceMode(bool isOn)
-{
-	m_bUseSequence = isOn;
-}
-
-bool CNetworkStream::SendSequence()
-{
-	if (!m_bUseSequence)
-		return true;
-
-	BYTE bSeq = m_SequenceGenerator(UINT8_MAX + 1);
-	return Send(sizeof(BYTE), &bSeq);
-}
-
-uint8_t CNetworkStream::GetNextSequence()
-{
-	return m_SequenceGenerator(UINT8_MAX + 1);
-}
-
 bool CNetworkStream::OnProcess()
 {
 	return true;
@@ -694,6 +626,96 @@ void CNetworkStream::OnConnectFailure()
 	Tracen("Failed to connect.");
 }
 
+// ---------------------------------------------------------------------------
+// Control-plane packet handlers (shared by all connection types)
+// ---------------------------------------------------------------------------
+
+bool CNetworkStream::RecvKeyChallenge()
+{
+	TPacketGCKeyChallenge packet;
+	if (!Recv(sizeof(packet), &packet))
+		return false;
+
+	Tracen("KEY_CHALLENGE RECV");
+
+	SecureCipher& cipher = GetSecureCipher();
+	if (!cipher.Initialize())
+	{
+		TraceError("SecureCipher initialization failed");
+		Disconnect();
+		return false;
+	}
+
+	if (!cipher.ComputeClientKeys(packet.server_pk))
+	{
+		TraceError("Failed to compute client session keys");
+		Disconnect();
+		return false;
+	}
+
+	TPacketCGKeyResponse response;
+	response.header = CG::KEY_RESPONSE;
+	response.length = sizeof(response);
+	cipher.GetPublicKey(response.client_pk);
+	cipher.ComputeChallengeResponse(packet.challenge, response.challenge_response);
+
+	if (!Send(sizeof(response), &response))
+	{
+		TraceError("Failed to send key response");
+		return false;
+	}
+
+	Tracen("KEY_RESPONSE SENT");
+	return true;
+}
+
+bool CNetworkStream::RecvKeyComplete()
+{
+	TPacketGCKeyComplete packet;
+	if (!Recv(sizeof(packet), &packet))
+		return false;
+
+	SecureCipher& cipher = GetSecureCipher();
+
+	uint8_t decrypted_token[SecureCipher::SESSION_TOKEN_SIZE];
+	if (!cipher.DecryptToken(packet.encrypted_token, sizeof(packet.encrypted_token),
+	                          packet.nonce, decrypted_token))
+	{
+		TraceError("Failed to decrypt session token");
+		Disconnect();
+		return false;
+	}
+
+	cipher.SetSessionToken(decrypted_token);
+	cipher.SetActivated(true);
+	DecryptPendingRecvData();
+
+	return true;
+}
+
+bool CNetworkStream::RecvPingPacket()
+{
+	TPacketGCPing kPacketPing;
+	if (!Recv(sizeof(kPacketPing), &kPacketPing))
+		return false;
+
+	return SendPongPacket();
+}
+
+bool CNetworkStream::SendPongPacket()
+{
+	TPacketCGPong kPacketPong;
+	kPacketPong.header = CG::PONG;
+	kPacketPong.length = sizeof(kPacketPong);
+
+	if (!Send(sizeof(kPacketPong), &kPacketPong))
+		return false;
+
+	return true;
+}
+
+// ---------------------------------------------------------------------------
+
 CNetworkStream::CNetworkStream()
 {
 	m_sock = INVALID_SOCKET;
@@ -701,33 +723,9 @@ CNetworkStream::CNetworkStream()
 	m_isOnline = false;
 	m_connectLimitTime = 0;
 
-	m_recvBuf = NULL;
-	m_recvBufSize = 0;
-	m_recvBufOutputPos = 0;
-	m_recvBufInputPos = 0;
-
-	m_sendBuf = NULL;
-	m_sendBufSize = 0;
-	m_sendBufOutputPos = 0;
-	m_sendBufInputPos = 0;
-
-	m_SequenceGenerator.seed(SEQUENCE_SEED);
-	m_bUseSequence = false;
 }
 
 CNetworkStream::~CNetworkStream()
 {
 	Clear();
-
-	if (m_recvBuf)
-	{
-		delete [] m_recvBuf;
-		m_recvBuf = NULL;
-	}
-
-	if (m_sendBuf)
-	{
-		delete [] m_sendBuf;
-		m_sendBuf = NULL;
-	}
 }

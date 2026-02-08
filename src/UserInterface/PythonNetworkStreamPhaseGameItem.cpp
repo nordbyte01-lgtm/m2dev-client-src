@@ -18,13 +18,12 @@ bool CPythonNetworkStream::SendSafeBoxMoneyPacket(BYTE byState, DWORD dwMoney)
 	return false;
 
 //	TPacketCGSafeboxMoney kSafeboxMoney;
-//	kSafeboxMoney.bHeader = HEADER_CG_SAFEBOX_MONEY;
+//	kSafeboxMoney.bHeader = CG::SAFEBOX_MONEY;
 //	kSafeboxMoney.bState = byState;
 //	kSafeboxMoney.dwMoney = dwMoney;
 //	if (!Send(sizeof(kSafeboxMoney), &kSafeboxMoney))
 //		return false;
 //
-//	return SendSequence();
 }
 
 bool CPythonNetworkStream::SendSafeBoxCheckinPacket(TItemPos InventoryPos, BYTE bySafeBoxPos)
@@ -32,13 +31,14 @@ bool CPythonNetworkStream::SendSafeBoxCheckinPacket(TItemPos InventoryPos, BYTE 
 	__PlayInventoryItemDropSound(InventoryPos);
 
 	TPacketCGSafeboxCheckin kSafeboxCheckin;
-	kSafeboxCheckin.bHeader = HEADER_CG_SAFEBOX_CHECKIN;
+	kSafeboxCheckin.header = CG::SAFEBOX_CHECKIN;
+	kSafeboxCheckin.length = sizeof(kSafeboxCheckin);
 	kSafeboxCheckin.ItemPos = InventoryPos;
 	kSafeboxCheckin.bSafePos = bySafeBoxPos;
 	if (!Send(sizeof(kSafeboxCheckin), &kSafeboxCheckin))
 		return false;
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendSafeBoxCheckoutPacket(BYTE bySafeBoxPos, TItemPos InventoryPos)
@@ -46,13 +46,14 @@ bool CPythonNetworkStream::SendSafeBoxCheckoutPacket(BYTE bySafeBoxPos, TItemPos
 	__PlaySafeBoxItemDropSound(bySafeBoxPos);
 
 	TPacketCGSafeboxCheckout kSafeboxCheckout;
-	kSafeboxCheckout.bHeader = HEADER_CG_SAFEBOX_CHECKOUT;
+	kSafeboxCheckout.header = CG::SAFEBOX_CHECKOUT;
+	kSafeboxCheckout.length = sizeof(kSafeboxCheckout);
 	kSafeboxCheckout.bSafePos = bySafeBoxPos;
 	kSafeboxCheckout.ItemPos = InventoryPos;
 	if (!Send(sizeof(kSafeboxCheckout), &kSafeboxCheckout))
 		return false;
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendSafeBoxItemMovePacket(BYTE bySourcePos, BYTE byTargetPos, BYTE byCount)
@@ -60,14 +61,15 @@ bool CPythonNetworkStream::SendSafeBoxItemMovePacket(BYTE bySourcePos, BYTE byTa
 	__PlaySafeBoxItemDropSound(bySourcePos);
 
 	TPacketCGItemMove kItemMove;
-	kItemMove.header = HEADER_CG_SAFEBOX_ITEM_MOVE;
+	kItemMove.header = CG::SAFEBOX_ITEM_MOVE;
+	kItemMove.length = sizeof(kItemMove);
 	kItemMove.pos = TItemPos(INVENTORY, bySourcePos);
 	kItemMove.num = byCount;
 	kItemMove.change_pos = TItemPos(INVENTORY, byTargetPos);
 	if (!Send(sizeof(kItemMove), &kItemMove))
 		return false;
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::RecvSafeBoxSetPacket()
@@ -136,7 +138,7 @@ bool CPythonNetworkStream::RecvSafeBoxMoneyChangePacket()
 	if (!Recv(sizeof(kMoneyChange), &kMoneyChange))
 		return false;
 
-	CPythonSafeBox::Instance().SetMoney(kMoneyChange.dwMoney);
+	CPythonSafeBox::Instance().SetMoney(kMoneyChange.lMoney);
 	PyCallClassMemberFunc(m_apoPhaseWnd[PHASE_WINDOW_GAME], "RefreshSafeboxMoney", Py_BuildValue("()"));
 
 	return true;
@@ -152,13 +154,14 @@ bool CPythonNetworkStream::SendMallCheckoutPacket(BYTE byMallPos, TItemPos Inven
 	__PlayMallItemDropSound(byMallPos);
 
 	TPacketCGMallCheckout kMallCheckoutPacket;
-	kMallCheckoutPacket.bHeader = HEADER_CG_MALL_CHECKOUT;
+	kMallCheckoutPacket.header = CG::MALL_CHECKOUT;
+	kMallCheckoutPacket.length = sizeof(kMallCheckoutPacket);
 	kMallCheckoutPacket.bMallPos = byMallPos;
 	kMallCheckoutPacket.ItemPos = InventoryPos;
 	if (!Send(sizeof(kMallCheckoutPacket), &kMallCheckoutPacket))
 		return false;
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::RecvMallOpenPacket()
@@ -412,8 +415,9 @@ bool CPythonNetworkStream::SendShopEndPacket()
 		return true;
 
 	TPacketCGShop packet_shop;
-	packet_shop.header = HEADER_CG_SHOP;
-	packet_shop.subheader = SHOP_SUBHEADER_CG_END;
+	packet_shop.header = CG::SHOP;
+	packet_shop.length = sizeof(packet_shop);
+	packet_shop.subheader = ShopSub::CG::END;
 
 	if (!Send(sizeof(packet_shop), &packet_shop))
 	{
@@ -421,7 +425,7 @@ bool CPythonNetworkStream::SendShopEndPacket()
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendShopBuyPacket(BYTE bPos)
@@ -430,8 +434,9 @@ bool CPythonNetworkStream::SendShopBuyPacket(BYTE bPos)
 		return true;
 	
 	TPacketCGShop PacketShop;
-	PacketShop.header = HEADER_CG_SHOP;
-	PacketShop.subheader = SHOP_SUBHEADER_CG_BUY;
+	PacketShop.header = CG::SHOP;
+	PacketShop.length = sizeof(PacketShop) + sizeof(BYTE) + sizeof(BYTE);
+	PacketShop.subheader = ShopSub::CG::BUY;
 
 	if (!Send(sizeof(TPacketCGShop), &PacketShop))
 	{
@@ -452,7 +457,7 @@ bool CPythonNetworkStream::SendShopBuyPacket(BYTE bPos)
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendShopSellPacket(BYTE bySlot)
@@ -461,8 +466,9 @@ bool CPythonNetworkStream::SendShopSellPacket(BYTE bySlot)
 		return true;
 
 	TPacketCGShop PacketShop;
-	PacketShop.header = HEADER_CG_SHOP;
-	PacketShop.subheader = SHOP_SUBHEADER_CG_SELL;
+	PacketShop.header = CG::SHOP;
+	PacketShop.length = sizeof(PacketShop) + sizeof(BYTE);
+	PacketShop.subheader = ShopSub::CG::SELL;
 
 	if (!Send(sizeof(TPacketCGShop), &PacketShop))
 	{
@@ -475,7 +481,7 @@ bool CPythonNetworkStream::SendShopSellPacket(BYTE bySlot)
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendShopSellPacketNew(BYTE bySlot, BYTE byCount)
@@ -484,8 +490,9 @@ bool CPythonNetworkStream::SendShopSellPacketNew(BYTE bySlot, BYTE byCount)
 		return true;
 
 	TPacketCGShop PacketShop;
-	PacketShop.header = HEADER_CG_SHOP;
-	PacketShop.subheader = SHOP_SUBHEADER_CG_SELL2;
+	PacketShop.header = CG::SHOP;
+	PacketShop.length = sizeof(PacketShop) + sizeof(BYTE) + sizeof(BYTE);
+	PacketShop.subheader = ShopSub::CG::SELL2;
 
 	if (!Send(sizeof(TPacketCGShop), &PacketShop))
 	{
@@ -505,7 +512,7 @@ bool CPythonNetworkStream::SendShopSellPacketNew(BYTE bySlot, BYTE byCount)
 
 	Tracef(" SendShopSellPacketNew(bySlot=%d, byCount=%d)\n", bySlot, byCount);
 
-	return SendSequence();
+	return true;
 }
 
 // Send
@@ -535,7 +542,8 @@ bool CPythonNetworkStream::SendItemUsePacket(TItemPos pos)
 	__PlayInventoryItemUseSound(pos);
 
 	TPacketCGItemUse itemUsePacket;
-	itemUsePacket.header = HEADER_CG_ITEM_USE;
+	itemUsePacket.header = CG::ITEM_USE;
+	itemUsePacket.length = sizeof(itemUsePacket);
 	itemUsePacket.pos = pos;
 
 	if (!Send(sizeof(TPacketCGItemUse), &itemUsePacket))
@@ -544,7 +552,7 @@ bool CPythonNetworkStream::SendItemUsePacket(TItemPos pos)
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendItemUseToItemPacket(TItemPos source_pos, TItemPos target_pos)
@@ -553,7 +561,8 @@ bool CPythonNetworkStream::SendItemUseToItemPacket(TItemPos source_pos, TItemPos
 		return true;	
 
 	TPacketCGItemUseToItem itemUseToItemPacket;
-	itemUseToItemPacket.header = HEADER_CG_ITEM_USE_TO_ITEM;
+	itemUseToItemPacket.header = CG::ITEM_USE_TO_ITEM;
+	itemUseToItemPacket.length = sizeof(itemUseToItemPacket);
 	itemUseToItemPacket.source_pos = source_pos;
 	itemUseToItemPacket.target_pos = target_pos;
 
@@ -567,7 +576,7 @@ bool CPythonNetworkStream::SendItemUseToItemPacket(TItemPos source_pos, TItemPos
 	Tracef(" << SendItemUseToItemPacket(src=%d, dst=%d)\n", source_pos, target_pos);
 #endif
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendItemDropPacket(TItemPos pos, DWORD elk)
@@ -576,7 +585,8 @@ bool CPythonNetworkStream::SendItemDropPacket(TItemPos pos, DWORD elk)
 		return true;
 
 	TPacketCGItemDrop itemDropPacket;
-	itemDropPacket.header = HEADER_CG_ITEM_DROP;
+	itemDropPacket.header = CG::ITEM_DROP;
+	itemDropPacket.length = sizeof(itemDropPacket);
 	itemDropPacket.pos = pos;
 	itemDropPacket.elk = elk;
 
@@ -586,7 +596,7 @@ bool CPythonNetworkStream::SendItemDropPacket(TItemPos pos, DWORD elk)
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendItemDropPacketNew(TItemPos pos, DWORD elk, DWORD count)
@@ -595,7 +605,8 @@ bool CPythonNetworkStream::SendItemDropPacketNew(TItemPos pos, DWORD elk, DWORD 
 		return true;
 
 	TPacketCGItemDrop2 itemDropPacket;
-	itemDropPacket.header = HEADER_CG_ITEM_DROP2;
+	itemDropPacket.header = CG::ITEM_DROP2;
+	itemDropPacket.length = sizeof(itemDropPacket);
 	itemDropPacket.pos = pos;
 	itemDropPacket.gold = elk;
 	itemDropPacket.count = count;
@@ -606,7 +617,7 @@ bool CPythonNetworkStream::SendItemDropPacketNew(TItemPos pos, DWORD elk, DWORD 
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::__IsEquipItemInSlot(TItemPos uSlotPos)
@@ -698,7 +709,8 @@ bool CPythonNetworkStream::SendItemMovePacket(TItemPos pos, TItemPos change_pos,
 	__PlayInventoryItemDropSound(pos);
 
 	TPacketCGItemMove	itemMovePacket;
-	itemMovePacket.header = HEADER_CG_ITEM_MOVE;
+	itemMovePacket.header = CG::ITEM_MOVE;
+	itemMovePacket.length = sizeof(itemMovePacket);
 	itemMovePacket.pos = pos;
 	itemMovePacket.change_pos = change_pos;
 	itemMovePacket.num = num;
@@ -709,7 +721,7 @@ bool CPythonNetworkStream::SendItemMovePacket(TItemPos pos, TItemPos change_pos,
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendItemPickUpPacket(DWORD vid)
@@ -718,7 +730,8 @@ bool CPythonNetworkStream::SendItemPickUpPacket(DWORD vid)
 		return true;
 
 	TPacketCGItemPickUp	itemPickUpPacket;
-	itemPickUpPacket.header = HEADER_CG_ITEM_PICKUP;
+	itemPickUpPacket.header = CG::ITEM_PICKUP;
+	itemPickUpPacket.length = sizeof(itemPickUpPacket);
 	itemPickUpPacket.vid = vid;
 
 	if (!Send(sizeof(TPacketCGItemPickUp), &itemPickUpPacket))
@@ -727,7 +740,7 @@ bool CPythonNetworkStream::SendItemPickUpPacket(DWORD vid)
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 
@@ -738,7 +751,8 @@ bool CPythonNetworkStream::SendQuickSlotAddPacket(BYTE wpos, BYTE type, BYTE pos
 
 	TPacketCGQuickSlotAdd quickSlotAddPacket;
 
-	quickSlotAddPacket.header		= HEADER_CG_QUICKSLOT_ADD;
+	quickSlotAddPacket.header		= CG::QUICKSLOT_ADD;
+	quickSlotAddPacket.length = sizeof(quickSlotAddPacket);
 	quickSlotAddPacket.pos			= wpos;
 	quickSlotAddPacket.slot.Type	= type;
 	quickSlotAddPacket.slot.Position = pos;
@@ -749,7 +763,7 @@ bool CPythonNetworkStream::SendQuickSlotAddPacket(BYTE wpos, BYTE type, BYTE pos
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendQuickSlotDelPacket(BYTE pos)
@@ -759,7 +773,8 @@ bool CPythonNetworkStream::SendQuickSlotDelPacket(BYTE pos)
 
 	TPacketCGQuickSlotDel quickSlotDelPacket;
 
-	quickSlotDelPacket.header = HEADER_CG_QUICKSLOT_DEL;
+	quickSlotDelPacket.header = CG::QUICKSLOT_DEL;
+	quickSlotDelPacket.length = sizeof(quickSlotDelPacket);
 	quickSlotDelPacket.pos = pos;
 
 	if (!Send(sizeof(TPacketCGQuickSlotDel), &quickSlotDelPacket))
@@ -768,7 +783,7 @@ bool CPythonNetworkStream::SendQuickSlotDelPacket(BYTE pos)
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendQuickSlotMovePacket(BYTE pos, BYTE change_pos)
@@ -778,7 +793,8 @@ bool CPythonNetworkStream::SendQuickSlotMovePacket(BYTE pos, BYTE change_pos)
 
 	TPacketCGQuickSlotSwap quickSlotSwapPacket;
 
-	quickSlotSwapPacket.header = HEADER_CG_QUICKSLOT_SWAP;
+	quickSlotSwapPacket.header = CG::QUICKSLOT_SWAP;
+	quickSlotSwapPacket.length = sizeof(quickSlotSwapPacket);
 	quickSlotSwapPacket.pos = pos;
 	quickSlotSwapPacket.change_pos = change_pos;
 
@@ -788,7 +804,7 @@ bool CPythonNetworkStream::SendQuickSlotMovePacket(BYTE pos, BYTE change_pos)
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::RecvSpecialEffect()
@@ -946,19 +962,19 @@ bool CPythonNetworkStream::RecvDragonSoulRefine()
 	
 	switch (kDragonSoul.bSubType)
 	{
-	case DS_SUB_HEADER_OPEN:
+	case DragonSoulSub::OPEN:
 		PyCallClassMemberFunc(m_apoPhaseWnd[PHASE_WINDOW_GAME], "BINARY_DragonSoulRefineWindow_Open", Py_BuildValue("()"));
 		break;
-	case DS_SUB_HEADER_REFINE_FAIL:
-	case DS_SUB_HEADER_REFINE_FAIL_MAX_REFINE:
-	case DS_SUB_HEADER_REFINE_FAIL_INVALID_MATERIAL:
-	case DS_SUB_HEADER_REFINE_FAIL_NOT_ENOUGH_MONEY:
-	case DS_SUB_HEADER_REFINE_FAIL_NOT_ENOUGH_MATERIAL:
-	case DS_SUB_HEADER_REFINE_FAIL_TOO_MUCH_MATERIAL:
+	case DragonSoulSub::REFINE_FAIL:
+	case DragonSoulSub::REFINE_FAIL_MAX_REFINE:
+	case DragonSoulSub::REFINE_FAIL_INVALID_MATERIAL:
+	case DragonSoulSub::REFINE_FAIL_NOT_ENOUGH_MONEY:
+	case DragonSoulSub::REFINE_FAIL_NOT_ENOUGH_MATERIAL:
+	case DragonSoulSub::REFINE_FAIL_TOO_MUCH_MATERIAL:
 		PyCallClassMemberFunc(m_apoPhaseWnd[PHASE_WINDOW_GAME], "BINARY_DragonSoulRefineWindow_RefineFail", Py_BuildValue("(iii)", 
 			kDragonSoul.bSubType, kDragonSoul.Pos.window_type, kDragonSoul.Pos.cell));
 		break;
-	case DS_SUB_HEADER_REFINE_SUCCEED:
+	case DragonSoulSub::REFINE_SUCCEED:
 		PyCallClassMemberFunc(m_apoPhaseWnd[PHASE_WINDOW_GAME], "BINARY_DragonSoulRefineWindow_RefineSucceed", 
 				Py_BuildValue("(ii)", kDragonSoul.Pos.window_type, kDragonSoul.Pos.cell));
 		break;

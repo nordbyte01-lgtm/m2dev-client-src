@@ -2,10 +2,9 @@
 
 #include "EterBase/SecureCipher.h"
 #include "NetAddress.h"
+#include "RingBuffer.h"
+#include "ControlPackets.h"
 
-#include <pcg_random.hpp>
-
-#define SEQUENCE_SEED 0
 
 class CNetworkStream
 {
@@ -44,10 +43,6 @@ class CNetworkStream
 
 		bool IsOnline();
 
-		void SetPacketSequenceMode(bool isOn);
-		bool SendSequence();
-		uint8_t GetNextSequence();
-
 	protected:
 		virtual void OnConnectSuccess();
 		virtual void OnConnectFailure();
@@ -57,8 +52,6 @@ class CNetworkStream
 
 		bool __SendInternalBuffer();
 		bool __RecvInternalBuffer();
-
-		void __PopSendBuffer();
 
 		int __GetSendBufferSize();
 
@@ -71,18 +64,31 @@ class CNetworkStream
 		// Must be called after activating the cipher mid-stream
 		void DecryptPendingRecvData();
 
+		// Control-plane packet handlers (shared by all connection types)
+		virtual bool RecvKeyChallenge();
+		virtual bool RecvKeyComplete();
+		bool RecvPingPacket();
+		bool SendPongPacket();
+
+	// Packet send tracking (for debug sequence correlation)
+	protected:
+		struct SentPacketLogEntry
+		{
+			uint32_t seq;
+			uint16_t header;
+			uint16_t length;
+		};
+
+		static constexpr size_t SENT_PACKET_LOG_SIZE = 32;
+
+		SentPacketLogEntry	m_aSentPacketLog[SENT_PACKET_LOG_SIZE] = {};
+		uint32_t			m_dwSentPacketSeq = 0;
+
 	private:
 		time_t	m_connectLimitTime;
 
-		char*	m_recvBuf;
-		int		m_recvBufSize;
-		int		m_recvBufInputPos;
-		int		m_recvBufOutputPos;
-
-		char*	m_sendBuf;
-		int		m_sendBufSize;
-		int		m_sendBufInputPos;
-		int		m_sendBufOutputPos;
+		RingBuffer m_recvBuf;
+		RingBuffer m_sendBuf;
 
 		bool	m_isOnline;
 
@@ -93,7 +99,4 @@ class CNetworkStream
 
 		CNetworkAddress m_addr;
 
-		// Sequence
-		pcg32					m_SequenceGenerator;
-		bool					m_bUseSequence;
 };

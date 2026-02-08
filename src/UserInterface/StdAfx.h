@@ -35,7 +35,6 @@ enum
 	PLAYER_NAME_MAX_LEN = 12,
 };
 
-void initudp();
 void initapp();
 void initime();
 void initsystem();

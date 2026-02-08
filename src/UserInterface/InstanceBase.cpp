@@ -1164,11 +1164,6 @@ float CInstanceBase::GetLocalTime()
 	return m_GraphicThingInstance.GetLocalTime();
 }
 
-
-void CInstanceBase::PushUDPState(DWORD dwCmdTime, const TPixelPosition& c_rkPPosDst, float fDstRot, UINT eFunc, UINT uArg)
-{
-}
-
 DWORD	ELTimer_GetServerFrameMSec();
 
 void CInstanceBase::PushTCPStateExpanded(DWORD dwCmdTime, const TPixelPosition& c_rkPPosDst, float fDstRot, UINT eFunc, UINT uArg, UINT uTargetVID)
@@ -2688,29 +2683,6 @@ DWORD CInstanceBase::GetWeaponType()
 	return pItemData->GetWeaponType();
 }
 
-/*
-void CInstanceBase::SetParts(const WORD * c_pParts)
-{
-	if (IsPoly())
-		return;
-
-	if (__IsShapeAnimalWear())
-		return;
-
-	UINT eWeapon=c_pParts[CRaceData::PART_WEAPON];
-
-	if (__IsChangableWeapon(eWeapon) == false)
-			eWeapon = 0;
-
-	if (eWeapon != m_GraphicThingInstance.GetPartItemID(CRaceData::PART_WEAPON))
-	{
-		m_GraphicThingInstance.AttachPart(CRaceData::PART_MAIN, CRaceData::PART_WEAPON, eWeapon);
-		m_awPart[CRaceData::PART_WEAPON] = eWeapon;
-	}
-
-	__AttachHorseSaddle();
-}
-*/
 
 void CInstanceBase::__ClearWeaponRefineEffect()
 {

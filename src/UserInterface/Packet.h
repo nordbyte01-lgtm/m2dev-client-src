@@ -1,318 +1,439 @@
 #pragma once
-#include "Gamelib/RaceData.h"
 #include "StdAfx.h"
-
 #include "GameType.h"
 
-typedef uint8_t TPacketHeader;
+#include <cstdint>
 
-enum
+// Control-plane structs + headers (shared with EterLib/NetStream base class)
+#include "EterLib/ControlPackets.h"
+
+//
+// Packet header constants (uint16_t)
+//
+// Packet framing: [header:2] [length:2] [payload...]
+// - header: one of the constants below
+// - length: total packet size including header+length (minimum 4)
+// - payload: packet-specific data
+//
+// Ranges:
+//   0x0001-0x00FF  Control (handshake, phase, ping, key exchange)
+//   0x0100-0x01FF  Authentication (login, auth, empire)
+//   0x0200-0x02FF  Character (create, delete, select, stats)
+//   0x0300-0x03FF  Movement (move, sync, warp)
+//   0x0400-0x04FF  Combat (attack, skill, damage, pvp)
+//   0x0500-0x05FF  Items (use, drop, move, exchange, refine)
+//   0x0600-0x06FF  Chat (chat, whisper)
+//   0x0700-0x07FF  Social (party, guild, messenger)
+//   0x0800-0x08FF  Shop/Trade (shop, safebox, mall)
+//   0x0900-0x09FF  Quest (script, quest confirm)
+//   0x0A00-0x0AFF  UI/Effect (target, affect, effects)
+//   0x0B00-0x0BFF  World (dungeon, fishing, land, time)
+//   0x0C00-0x0CFF  Guild Marks
+//
+
+// Packet header type (used by dispatch/registration systems)
+typedef uint16_t TPacketHeader;
+
+// Minimum packet size: header(2) + length(2)
+constexpr uint16_t PACKET_HEADER_SIZE = 4;
+
+// ============================================================================
+// CG -- Client -> Game
+// ============================================================================
+namespace CG
 {
-	/////////////////////////////////////////////////
-	// To Server
-	// HEADER_BLANK is the not use(for future use)
-	HEADER_CG_ATTACK							= 2,
-	HEADER_CG_CHAT								= 3,
-	HEADER_CG_PLAYER_CREATE						= 4,		// 새로운 플래이어를 생성
-	HEADER_CG_PLAYER_DESTROY					= 5,		// 플래이어를 삭제.
-	HEADER_CG_PLAYER_SELECT						= 6,
-	HEADER_CG_CHARACTER_MOVE					= 7,
-	HEADER_CG_SYNC_POSITION  					= 8,
-	HEADER_CG_DIRECT_ENTER						= 9,
-	HEADER_CG_ENTERGAME							= 10,
-	HEADER_CG_ITEM_USE							= 11,
-	HEADER_CG_ITEM_DROP							= 12,
-	HEADER_CG_ITEM_MOVE							= 13,
-	HEADER_CG_ITEM_PICKUP						= 15,
-	HEADER_CG_QUICKSLOT_ADD                     = 16,
-	HEADER_CG_QUICKSLOT_DEL                     = 17,
-	HEADER_CG_QUICKSLOT_SWAP                    = 18,
-	HEADER_CG_WHISPER							= 19,
-	HEADER_CG_ITEM_DROP2                        = 20,	
-	//HEADER_BLANK21								= 21,
-	//HEADER_BLANK22								= 22,
-	//HEADER_BLANK22								= 23,
-	//HEADER_BLANK24								= 24,
-	//HEADER_BLANK25								= 25,
-	HEADER_CG_ON_CLICK							= 26,
-	HEADER_CG_EXCHANGE							= 27,
-    HEADER_CG_CHARACTER_POSITION                = 28,
-    HEADER_CG_SCRIPT_ANSWER						= 29,
-	HEADER_CG_QUEST_INPUT_STRING				= 30,
-    HEADER_CG_QUEST_CONFIRM                     = 31,
-	HEADER_CG_QUEST_CANCEL						= 32,
-	//HEADER_BLANK33								= 33,
-	//HEADER_BLANK34								= 34,
-	//HEADER_BLANK35								= 35,
-	//HEADER_BLANK36								= 36,
-	//HEADER_BLANK37								= 37,
-	//HEADER_BLANK38								= 38,
-	//HEADER_BLANK39								= 39,
-	//HEADER_BLANK40								= 40,
-	HEADER_CG_PVP								= 41,
-	//HEADER_BLANK42								= 42,
-	//HEADER_BLANK43								= 43,
-	//HEADER_BLANK44								= 44,
-	//HEADER_BLANK45								= 45,
-	//HEADER_BLANK46								= 46,
-	//HEADER_BLANK47								= 47,
-	//HEADER_BLANK48								= 48,
-	//HEADER_BLANK49								= 49,
-    HEADER_CG_SHOP								= 50,
-	HEADER_CG_FLY_TARGETING						= 51,
-	HEADER_CG_USE_SKILL							= 52,
-    HEADER_CG_ADD_FLY_TARGETING                 = 53,
-	HEADER_CG_SHOOT								= 54,
-	HEADER_CG_MYSHOP                            = 55,    
-	//HEADER_BLANK56								= 56,
-	//HEADER_BLANK57								= 57,
-	//HEADER_BLANK58								= 58,
-	//HEADER_BLANK59								= 59,
-	HEADER_CG_ITEM_USE_TO_ITEM					= 60,
-    HEADER_CG_TARGET                            = 61,
-	//HEADER_BLANK62								= 62,
-	//HEADER_BLANK63								= 63,
-	//HEADER_BLANK64								= 64,
-	HEADER_CG_WARP								= 65, 
-    HEADER_CG_SCRIPT_BUTTON						= 66,
-    HEADER_CG_MESSENGER                         = 67,
-	//HEADER_BLANK68								= 68,
-    HEADER_CG_MALL_CHECKOUT                     = 69,
-    HEADER_CG_SAFEBOX_CHECKIN                   = 70,   // 아이템을 창고에 넣는다.
-    HEADER_CG_SAFEBOX_CHECKOUT                  = 71,   // 아이템을 창고로 부터 빼온다.
-    HEADER_CG_PARTY_INVITE                      = 72,
-    HEADER_CG_PARTY_INVITE_ANSWER               = 73,
-    HEADER_CG_PARTY_REMOVE                      = 74,
-    HEADER_CG_PARTY_SET_STATE                   = 75,
-    HEADER_CG_PARTY_USE_SKILL                   = 76,
-    HEADER_CG_SAFEBOX_ITEM_MOVE                 = 77,
-	HEADER_CG_PARTY_PARAMETER                   = 78,
-	//HEADER_BLANK68								= 79,
-	HEADER_CG_GUILD								= 80,
-	HEADER_CG_ANSWER_MAKE_GUILD					= 81,
-    HEADER_CG_FISHING                           = 82,
-    HEADER_CG_GIVE_ITEM                         = 83,
-	//HEADER_BLANK84								= 84,
-	//HEADER_BLANK85								= 85,
-	//HEADER_BLANK86								= 86,
-	//HEADER_BLANK87								= 87,
-	//HEADER_BLANK88								= 88,
-	//HEADER_BLANK89								= 89,
-    HEADER_CG_EMPIRE                            = 90,
-	//HEADER_BLANK91								= 91,
-	//HEADER_BLANK92								= 92,
-	//HEADER_BLANK93								= 93,
-	//HEADER_BLANK94								= 94,
-	//HEADER_BLANK95								= 95,
-    HEADER_CG_REFINE                            = 96,
-	//HEADER_BLANK97								= 97,
-	//HEADER_BLANK98								= 98,
-	//HEADER_BLANK99								= 99,
+    // Control (PONG, KEY_RESPONSE moved to EterLib/ControlPackets.h)
+    constexpr uint16_t CLIENT_VERSION     = 0x000D;
+    constexpr uint16_t STATE_CHECKER      = 0x000F;
+    constexpr uint16_t TEXT               = 0x0011;
 
-	HEADER_CG_MARK_LOGIN						= 100,
-	HEADER_CG_MARK_CRCLIST						= 101,
-	HEADER_CG_MARK_UPLOAD						= 102,
-	HEADER_CG_MARK_IDXLIST						= 104,
+    // Authentication
+    constexpr uint16_t LOGIN2             = 0x0101;
+    constexpr uint16_t LOGIN3             = 0x0102;
+    constexpr uint16_t LOGIN_SECURE       = 0x0103;
+    constexpr uint16_t EMPIRE             = 0x010A;
+    constexpr uint16_t CHANGE_NAME        = 0x010B;
 
-	HEADER_CG_CRC_REPORT						= 103,
-	
-	HEADER_CG_HACK								= 105,
-    HEADER_CG_CHANGE_NAME                       = 106,
-    HEADER_CG_SMS                               = 107,
-    HEADER_CG_LOGIN2                            = 109,
-	HEADER_CG_DUNGEON							= 110,
-	HEADER_CG_LOGIN3							= 111,
-	HEADER_CG_GUILD_SYMBOL_UPLOAD				= 112,
-	HEADER_CG_GUILD_SYMBOL_CRC					= 113,
-	HEADER_CG_SCRIPT_SELECT_ITEM				= 114,
-	HEADER_CG_LOGIN4							= 115,
+    // Character
+    constexpr uint16_t CHARACTER_CREATE   = 0x0201;
+    constexpr uint16_t CHARACTER_DELETE   = 0x0202;
+    constexpr uint16_t CHARACTER_SELECT   = 0x0203;
+    constexpr uint16_t ENTERGAME          = 0x0204;
 
-	HEADER_CG_DRAGON_SOUL_REFINE			= 205,
-	HEADER_CG_STATE_CHECKER					= 206,
+    // Movement
+    constexpr uint16_t MOVE               = 0x0301;
+    constexpr uint16_t SYNC_POSITION      = 0x0303;
+    constexpr uint16_t WARP               = 0x0305;
 
-	HEADER_CG_KEY_RESPONSE						= 0xf9, // Secure key exchange response
-	HEADER_CG_LOGIN_SECURE						= 0xf6, // Secure login packet
-	HEADER_CG_TIME_SYNC							= 0xfc,
-	HEADER_CG_CLIENT_VERSION					= 0xfd,
-	HEADER_CG_CLIENT_VERSION2					= 0xf1,
-	HEADER_CG_PONG								= 0xfe,
-    HEADER_CG_HANDSHAKE                         = 0xff,
-	/////////////////////////////////////////////////
-	// From Server
+    // Combat
+    constexpr uint16_t ATTACK             = 0x0401;
+    constexpr uint16_t USE_SKILL          = 0x0402;
+    constexpr uint16_t SHOOT              = 0x0403;
+    constexpr uint16_t FLY_TARGETING      = 0x0404;
+    constexpr uint16_t ADD_FLY_TARGETING  = 0x0405;
 
-	HEADER_GC_CHARACTER_ADD						= 1,
-	HEADER_GC_CHARACTER_DEL						= 2,
-	HEADER_GC_CHARACTER_MOVE					= 3,
-	HEADER_GC_CHAT								= 4,
-	HEADER_GC_SYNC_POSITION 					= 5,
-	HEADER_GC_LOGIN_SUCCESS3					= 6,
-	HEADER_GC_LOGIN_FAILURE						= 7,
-	HEADER_GC_PLAYER_CREATE_SUCCESS				= 8,
-	HEADER_GC_PLAYER_CREATE_FAILURE				= 9,
-	HEADER_GC_PLAYER_DELETE_SUCCESS				= 10,
-	HEADER_GC_PLAYER_DELETE_WRONG_SOCIAL_ID		= 11,
-	// 12
-	HEADER_GC_STUN								= 13,
-	HEADER_GC_DEAD								= 14,
+    // Items
+    constexpr uint16_t ITEM_USE           = 0x0501;
+    constexpr uint16_t ITEM_DROP          = 0x0502;
+    constexpr uint16_t ITEM_DROP2         = 0x0503;
+    constexpr uint16_t ITEM_MOVE          = 0x0504;
+    constexpr uint16_t ITEM_PICKUP        = 0x0505;
+    constexpr uint16_t ITEM_USE_TO_ITEM   = 0x0506;
+    constexpr uint16_t ITEM_GIVE          = 0x0507;
+    constexpr uint16_t EXCHANGE           = 0x0508;
+    constexpr uint16_t QUICKSLOT_ADD      = 0x0509;
+    constexpr uint16_t QUICKSLOT_DEL      = 0x050A;
+    constexpr uint16_t QUICKSLOT_SWAP     = 0x050B;
+    constexpr uint16_t REFINE             = 0x050C;
+    constexpr uint16_t DRAGON_SOUL_REFINE = 0x050D;
 
-	HEADER_GC_MAIN_CHARACTER					= 15,
-	HEADER_GC_PLAYER_POINTS						= 16,
-	HEADER_GC_PLAYER_POINT_CHANGE				= 17,
-	HEADER_GC_CHANGE_SPEED						= 18,
-	HEADER_GC_CHARACTER_UPDATE                  = 19,
+    // Chat
+    constexpr uint16_t CHAT               = 0x0601;
+    constexpr uint16_t WHISPER            = 0x0602;
 
-	HEADER_GC_ITEM_DEL							= 20, // 아이템 창에 추가
-	HEADER_GC_ITEM_SET							= 21, // 아이템 창에 추가
-	HEADER_GC_ITEM_USE							= 22, // 아이템 사용 (주위 사람들에게 보여주기 위해)
-	HEADER_GC_ITEM_DROP							= 23, // 아이템 버리기
-	HEADER_GC_ITEM_UPDATE						= 25, // 아이템 수치 업데이트
+    // Social
+    constexpr uint16_t PARTY_INVITE       = 0x0701;
+    constexpr uint16_t PARTY_INVITE_ANSWER = 0x0702;
+    constexpr uint16_t PARTY_REMOVE       = 0x0703;
+    constexpr uint16_t PARTY_SET_STATE    = 0x0704;
+    constexpr uint16_t PARTY_USE_SKILL    = 0x0705;
+    constexpr uint16_t PARTY_PARAMETER    = 0x0706;
+    constexpr uint16_t GUILD              = 0x0720;
+    constexpr uint16_t ANSWER_MAKE_GUILD  = 0x0721;
+    constexpr uint16_t GUILD_SYMBOL_UPLOAD = 0x0722;
+    constexpr uint16_t SYMBOL_CRC         = 0x0723;
+    constexpr uint16_t MESSENGER          = 0x0740;
 
-	HEADER_GC_ITEM_GROUND_ADD					= 26, // 바닥에 아이템 추가
-	HEADER_GC_ITEM_GROUND_DEL					= 27, // 바닥에서 아이템 삭제
-    HEADER_GC_QUICKSLOT_ADD                     = 28,
-    HEADER_GC_QUICKSLOT_DEL                     = 29,
-    HEADER_GC_QUICKSLOT_SWAP                    = 30,
-	HEADER_GC_ITEM_OWNERSHIP					= 31,
-	HEADER_GC_LOGIN_SUCCESS4					= 32,
-	HEADER_GC_ITEM_UNBIND_TIME					= 33,
-	HEADER_GC_WHISPER							= 34,
-	HEADER_GC_ALERT								= 35,
+    // Shop / Safebox / Mall
+    constexpr uint16_t SHOP               = 0x0801;
+    constexpr uint16_t MYSHOP             = 0x0802;
+    constexpr uint16_t SAFEBOX_CHECKIN    = 0x0820;
+    constexpr uint16_t SAFEBOX_CHECKOUT   = 0x0821;
+    constexpr uint16_t SAFEBOX_ITEM_MOVE  = 0x0822;
+    constexpr uint16_t MALL_CHECKOUT      = 0x0840;
 
-	HEADER_GC_MOTION							= 36,
+    // Quest
+    constexpr uint16_t SCRIPT_ANSWER      = 0x0901;
+    constexpr uint16_t SCRIPT_BUTTON      = 0x0902;
+    constexpr uint16_t SCRIPT_SELECT_ITEM = 0x0903;
+    constexpr uint16_t QUEST_INPUT_STRING = 0x0904;
+    constexpr uint16_t QUEST_CONFIRM      = 0x0905;
+    constexpr uint16_t QUEST_CANCEL       = 0x0906;
 
-	HEADER_GC_SHOP							    = 38,
-	HEADER_GC_SHOP_SIGN							= 39,
+    // UI / Targeting
+    constexpr uint16_t TARGET             = 0x0A01;
+    constexpr uint16_t ON_CLICK           = 0x0A02;
+    constexpr uint16_t CHARACTER_POSITION = 0x0A60;
 
-	// 39 ~ 41 Balnk
-	HEADER_GC_DUEL_START						= 40,
-	HEADER_GC_PVP								= 41,
-	HEADER_GC_EXCHANGE							= 42,
-    HEADER_GC_CHARACTER_POSITION                = 43,
+    // World
+    constexpr uint16_t FISHING            = 0x0B01;
+    constexpr uint16_t DUNGEON            = 0x0B02;
+    constexpr uint16_t HACK               = 0x0B03;
 
-	HEADER_GC_PING								= 44,
+    // Guild Marks
+    constexpr uint16_t MARK_LOGIN         = 0x0C01;
+    constexpr uint16_t MARK_CRCLIST       = 0x0C02;
+    constexpr uint16_t MARK_UPLOAD        = 0x0C03;
+    constexpr uint16_t MARK_IDXLIST       = 0x0C04;
+}
 
-	HEADER_GC_SCRIPT							= 45,
-    HEADER_GC_QUEST_CONFIRM                     = 46,
+// ============================================================================
+// GC -- Game -> Client
+// ============================================================================
+namespace GC
+{
+    // Control (PING, PHASE, KEY_CHALLENGE, KEY_COMPLETE moved to EterLib/ControlPackets.h)
+    constexpr uint16_t RESPOND_CHANNELSTATUS = 0x0010;
 
-	HEADER_GC_MOUNT								= 61,
-	HEADER_GC_OWNERSHIP                         = 62, 
-    HEADER_GC_TARGET                            = 63,
-	HEADER_GC_WARP								= 65, 
-	HEADER_GC_ADD_FLY_TARGETING                 = 69,
+    // Authentication
+    constexpr uint16_t LOGIN_SUCCESS3     = 0x0104;
+    constexpr uint16_t LOGIN_SUCCESS4     = 0x0105;
+    constexpr uint16_t LOGIN_FAILURE      = 0x0106;
+    constexpr uint16_t LOGIN_KEY          = 0x0107;
+    constexpr uint16_t AUTH_SUCCESS       = 0x0108;
+    constexpr uint16_t EMPIRE             = 0x0109;
+    constexpr uint16_t CHANGE_NAME        = 0x010C;
 
-	HEADER_GC_CREATE_FLY						= 70,
-	HEADER_GC_FLY_TARGETING						= 71,
-	HEADER_GC_SKILL_LEVEL						= 72,
-	HEADER_GC_SKILL_COOLTIME_END				= 73,
-    HEADER_GC_MESSENGER                         = 74,
-	HEADER_GC_GUILD								= 75,
-	HEADER_GC_SKILL_LEVEL_NEW					= 76,
+    // Character
+    constexpr uint16_t CHARACTER_ADD      = 0x0205;
+    constexpr uint16_t CHARACTER_ADD2     = 0x0206;
+    constexpr uint16_t CHAR_ADDITIONAL_INFO = 0x0207;
+    constexpr uint16_t CHARACTER_DEL      = 0x0208;
+    constexpr uint16_t CHARACTER_UPDATE   = 0x0209;
+    constexpr uint16_t CHARACTER_UPDATE2  = 0x020A;
+    constexpr uint16_t CHARACTER_POSITION = 0x020B;
+    constexpr uint16_t PLAYER_CREATE_SUCCESS = 0x020C;
+    constexpr uint16_t PLAYER_CREATE_FAILURE = 0x020D;
+    constexpr uint16_t PLAYER_DELETE_SUCCESS = 0x020E;
+    constexpr uint16_t PLAYER_DELETE_WRONG_SOCIAL_ID = 0x020F;
+    constexpr uint16_t MAIN_CHARACTER     = 0x0210;
+    constexpr uint16_t PLAYER_POINTS      = 0x0214;
+    constexpr uint16_t PLAYER_POINT_CHANGE = 0x0215;
+    constexpr uint16_t STUN               = 0x0216;
+    constexpr uint16_t DEAD               = 0x0217;
+    constexpr uint16_t CHANGE_SPEED       = 0x0218;
+    constexpr uint16_t WALK_MODE          = 0x0219;
+    constexpr uint16_t SKILL_LEVEL        = 0x021A;
+    constexpr uint16_t SKILL_LEVEL_NEW    = 0x021B;
+    constexpr uint16_t SKILL_COOLTIME_END = 0x021C;
+    constexpr uint16_t CHANGE_SKILL_GROUP = 0x021D;
+    constexpr uint16_t VIEW_EQUIP         = 0x021E;
 
-    HEADER_GC_PARTY_INVITE                      = 77,
-    HEADER_GC_PARTY_ADD                         = 78,
-    HEADER_GC_PARTY_UPDATE                      = 79,
-    HEADER_GC_PARTY_REMOVE                      = 80,
+    // Movement
+    constexpr uint16_t MOVE               = 0x0302;
+    constexpr uint16_t SYNC_POSITION      = 0x0304;
+    constexpr uint16_t WARP               = 0x0306;
+    constexpr uint16_t MOTION             = 0x0307;
+    constexpr uint16_t DIG_MOTION         = 0x0308;
 
-    HEADER_GC_QUEST_INFO                        = 81,
-    HEADER_GC_REQUEST_MAKE_GUILD                = 82,
-	HEADER_GC_PARTY_PARAMETER                   = 83,
+    // Combat
+    constexpr uint16_t DAMAGE_INFO        = 0x0410;
+    constexpr uint16_t FLY_TARGETING      = 0x0411;
+    constexpr uint16_t ADD_FLY_TARGETING  = 0x0412;
+    constexpr uint16_t CREATE_FLY         = 0x0413;
+    constexpr uint16_t PVP                = 0x0414;
+    constexpr uint16_t DUEL_START         = 0x0415;
 
-    HEADER_GC_SAFEBOX_MONEY_CHANGE              = 84,
-    HEADER_GC_SAFEBOX_SET                       = 85,
-    HEADER_GC_SAFEBOX_DEL                       = 86,
-    HEADER_GC_SAFEBOX_WRONG_PASSWORD            = 87,
-    HEADER_GC_SAFEBOX_SIZE                      = 88,
+    // Items
+    constexpr uint16_t ITEM_DEL           = 0x0510;
+    constexpr uint16_t ITEM_SET           = 0x0511;
+    constexpr uint16_t ITEM_USE           = 0x0512;
+    constexpr uint16_t ITEM_DROP          = 0x0513;
+    constexpr uint16_t ITEM_UPDATE        = 0x0514;
+    constexpr uint16_t ITEM_GROUND_ADD    = 0x0515;
+    constexpr uint16_t ITEM_GROUND_DEL    = 0x0516;
+    constexpr uint16_t ITEM_OWNERSHIP     = 0x0517;
+    constexpr uint16_t ITEM_GET           = 0x0518;
+    constexpr uint16_t QUICKSLOT_ADD      = 0x0519;
+    constexpr uint16_t QUICKSLOT_DEL      = 0x051A;
+    constexpr uint16_t QUICKSLOT_SWAP     = 0x051B;
+    constexpr uint16_t EXCHANGE           = 0x051C;
+    constexpr uint16_t REFINE_INFORMATION = 0x051D;
+    constexpr uint16_t REFINE_INFORMATION_NEW = 0x051E;
+    constexpr uint16_t DRAGON_SOUL_REFINE = 0x051F;
 
-    HEADER_GC_FISHING                           = 89,
+    // Chat
+    constexpr uint16_t CHAT               = 0x0603;
+    constexpr uint16_t WHISPER            = 0x0604;
 
-    HEADER_GC_EMPIRE                            = 90,
+    // Social
+    constexpr uint16_t PARTY_INVITE       = 0x0710;
+    constexpr uint16_t PARTY_ADD          = 0x0711;
+    constexpr uint16_t PARTY_UPDATE       = 0x0712;
+    constexpr uint16_t PARTY_REMOVE       = 0x0713;
+    constexpr uint16_t PARTY_LINK         = 0x0714;
+    constexpr uint16_t PARTY_UNLINK       = 0x0715;
+    constexpr uint16_t PARTY_PARAMETER    = 0x0716;
+    constexpr uint16_t GUILD              = 0x0730;
+    constexpr uint16_t REQUEST_MAKE_GUILD = 0x0731;
+    constexpr uint16_t SYMBOL_DATA        = 0x0732;
+    constexpr uint16_t MESSENGER          = 0x0741;
+    constexpr uint16_t LOVER_INFO         = 0x0750;
+    constexpr uint16_t LOVE_POINT_UPDATE  = 0x0751;
 
-    HEADER_GC_PARTY_LINK                        = 91,
-    HEADER_GC_PARTY_UNLINK                      = 92,
+    // Shop / Safebox / Mall
+    constexpr uint16_t SHOP               = 0x0810;
+    constexpr uint16_t SHOP_SIGN          = 0x0811;
+    constexpr uint16_t SAFEBOX_SET        = 0x0830;
+    constexpr uint16_t SAFEBOX_DEL        = 0x0831;
+    constexpr uint16_t SAFEBOX_WRONG_PASSWORD = 0x0832;
+    constexpr uint16_t SAFEBOX_SIZE       = 0x0833;
+    constexpr uint16_t SAFEBOX_MONEY_CHANGE = 0x0834;
+    constexpr uint16_t MALL_OPEN          = 0x0841;
+    constexpr uint16_t MALL_SET           = 0x0842;
+    constexpr uint16_t MALL_DEL           = 0x0843;
 
-    HEADER_GC_REFINE_INFORMATION                = 95,
+    // Quest
+    constexpr uint16_t SCRIPT             = 0x0910;
+    constexpr uint16_t QUEST_CONFIRM      = 0x0911;
+    constexpr uint16_t QUEST_INFO         = 0x0912;
 
-	HEADER_GC_OBSERVER_ADD						= 96,
-	HEADER_GC_OBSERVER_REMOVE					= 97,
-	HEADER_GC_OBSERVER_MOVE						= 98,
-	HEADER_GC_VIEW_EQUIP                        = 99,
+    // UI / Effects / Targeting
+    constexpr uint16_t TARGET             = 0x0A10;
+    constexpr uint16_t TARGET_UPDATE      = 0x0A11;
+    constexpr uint16_t TARGET_DELETE      = 0x0A12;
+    constexpr uint16_t TARGET_CREATE_NEW  = 0x0A13;
+    constexpr uint16_t AFFECT_ADD         = 0x0A20;
+    constexpr uint16_t AFFECT_REMOVE      = 0x0A21;
+    constexpr uint16_t SEPCIAL_EFFECT     = 0x0A30;
+    constexpr uint16_t SPECIFIC_EFFECT    = 0x0A31;
+    constexpr uint16_t MOUNT              = 0x0A40;
+    constexpr uint16_t OWNERSHIP          = 0x0A41;
+    constexpr uint16_t NPC_POSITION       = 0x0A50;
 
-	HEADER_GC_MARK_BLOCK						= 100,
-	HEADER_GC_MARK_DIFF_DATA                    = 101,
-	HEADER_GC_MARK_IDXLIST						= 102,
-	HEADER_GC_MARK_UPDATE						= 103,
+    // World
+    constexpr uint16_t FISHING            = 0x0B10;
+    constexpr uint16_t DUNGEON            = 0x0B11;
+    constexpr uint16_t LAND_LIST          = 0x0B12;
+    constexpr uint16_t TIME               = 0x0B13;
+    constexpr uint16_t CHANNEL            = 0x0B14;
+    constexpr uint16_t MARK_UPDATE        = 0x0B15;
+    constexpr uint16_t OBSERVER_ADD       = 0x0B20;
+    constexpr uint16_t OBSERVER_REMOVE    = 0x0B21;
+    constexpr uint16_t OBSERVER_MOVE      = 0x0B22;
 
-	//HEADER_GC_SLOW_TIMER						= 105,
-    HEADER_GC_TIME                              = 106,
-    HEADER_GC_CHANGE_NAME                       = 107,
+    // Guild Marks
+    constexpr uint16_t MARK_BLOCK         = 0x0C10;
+    constexpr uint16_t MARK_IDXLIST       = 0x0C11;
+    constexpr uint16_t MARK_DIFF_DATA     = 0x0C12;
+}
 
-	HEADER_GC_DUNGEON							= 110,
-	HEADER_GC_WALK_MODE							= 111, 
-	HEADER_GC_CHANGE_SKILL_GROUP				= 112,
+// --- Phase constants ---
 
-	// SUPPORT_BGM
-	HEADER_GC_MAIN_CHARACTER2_EMPIRE			= 113,
-	// END_OF_SUPPORT_BGM
+enum EPhases
+{
+	PHASE_CLOSE,
+	PHASE_HANDSHAKE,
+	PHASE_LOGIN,
+	PHASE_SELECT,
+	PHASE_LOADING,
+	PHASE_GAME,
+	PHASE_DEAD,
 
-    HEADER_GC_SEPCIAL_EFFECT                    = 114,
-	HEADER_GC_NPC_POSITION						= 115,
-
-    HEADER_GC_CHARACTER_UPDATE2                 = 117,
-    HEADER_GC_LOGIN_KEY                         = 118,
-    HEADER_GC_REFINE_INFORMATION_NEW            = 119,
-    HEADER_GC_CHARACTER_ADD2                    = 120,
-    HEADER_GC_CHANNEL                           = 121,
-
-    HEADER_GC_MALL_OPEN                         = 122,
-	HEADER_GC_TARGET_UPDATE                     = 123,
-	HEADER_GC_TARGET_DELETE                     = 124,
-	HEADER_GC_TARGET_CREATE_NEW                 = 125,
-
-	HEADER_GC_AFFECT_ADD                        = 126,
-	HEADER_GC_AFFECT_REMOVE                     = 127,
-
-    HEADER_GC_MALL_SET                          = 128,
-    HEADER_GC_MALL_DEL                          = 129,
-	HEADER_GC_LAND_LIST                         = 130,
-	HEADER_GC_LOVER_INFO						= 131,
-	HEADER_GC_LOVE_POINT_UPDATE					= 132,
-	HEADER_GC_GUILD_SYMBOL_DATA					= 133,
-    HEADER_GC_DIG_MOTION                        = 134,
-
-	HEADER_GC_DAMAGE_INFO						= 135,
-	HEADER_GC_CHAR_ADDITIONAL_INFO				= 136,
-
-	// SUPPORT_BGM
-	HEADER_GC_MAIN_CHARACTER3_BGM				= 137,
-	HEADER_GC_MAIN_CHARACTER4_BGM_VOL			= 138,
-	// END_OF_SUPPORT_BGM
-
-    HEADER_GC_AUTH_SUCCESS                      = 150,
-
-	HEADER_GC_SPECIFIC_EFFECT					= 208,
-	HEADER_GC_DRAGON_SOUL_REFINE				= 209,
-	HEADER_GC_RESPOND_CHANNELSTATUS				= 210,
-
-	HEADER_GC_ITEM_GET							= 211,
-
-	HEADER_GC_KEY_CHALLENGE						= 0xf8, // Secure key exchange challenge
-	HEADER_GC_KEY_COMPLETE						= 0xf7, // Secure key exchange complete
-	HEADER_GC_HANDSHAKE_OK						= 0xfc, // 252
-	HEADER_GC_PHASE								= 0xfd,	// 253
-    HEADER_GC_BINDUDP                           = 0xfe, // 254
-    HEADER_GC_HANDSHAKE                         = 0xff, // 255
-
-	/////////////////////////////////////////////////
-	// Client To Client for UDP
-	/*
-	HEADER_CC_STATE_WAITING						= 1,
-	HEADER_CC_STATE_WALKING						= 2,
-	HEADER_CC_STATE_GOING						= 3,
-	HEADER_CC_EVENT_NORMAL_ATTACKING			= 4,
-	HEADER_CC_EVENT_COMBO_ATTACKING				= 5,
-	HEADER_CC_EVENT_HIT							= 6,
-	*/
+	PHASE_CLIENT_CONNECTING,
+	PHASE_DBCLIENT,
+	PHASE_P2P,
+	PHASE_AUTH,
 };
+
+// ============================================================================
+// Subheader enums — grouped by feature
+// ============================================================================
+
+namespace GuildSub {
+    namespace CG { enum : uint8_t {
+        ADD_MEMBER,
+        REMOVE_MEMBER,
+        CHANGE_GRADE_NAME,
+        CHANGE_GRADE_AUTHORITY,
+        OFFER,
+        POST_COMMENT,
+        DELETE_COMMENT,
+        REFRESH_COMMENT,
+        CHANGE_MEMBER_GRADE,
+        USE_SKILL,
+        CHANGE_MEMBER_GENERAL,
+        GUILD_INVITE_ANSWER,
+        CHARGE_GSP,
+        DEPOSIT_MONEY,
+        WITHDRAW_MONEY,
+    }; }
+    namespace GC { enum : uint8_t {
+        LOGIN,
+        LOGOUT,
+        LIST,
+        GRADE,
+        ADD,
+        REMOVE,
+        GRADE_NAME,
+        GRADE_AUTH,
+        INFO,
+        COMMENTS,
+        CHANGE_EXP,
+        CHANGE_MEMBER_GRADE,
+        SKILL_INFO,
+        CHANGE_MEMBER_GENERAL,
+        GUILD_INVITE,
+        WAR,
+        GUILD_NAME,
+        GUILD_WAR_LIST,
+        GUILD_WAR_END_LIST,
+        WAR_POINT,
+        MONEY_CHANGE,
+    }; }
+}
+
+namespace ShopSub {
+    namespace CG { enum : uint8_t {
+        END,
+        BUY,
+        SELL,
+        SELL2,
+    }; }
+    namespace GC { enum : uint8_t {
+        START,
+        END,
+        UPDATE_ITEM,
+        UPDATE_PRICE,
+        OK,
+        NOT_ENOUGH_MONEY,
+        SOLDOUT,
+        INVENTORY_FULL,
+        INVALID_POS,
+        SOLD_OUT,
+        START_EX,
+        NOT_ENOUGH_MONEY_EX,
+    }; }
+}
+
+namespace ExchangeSub {
+    namespace CG { enum : uint8_t {
+        START,
+        ITEM_ADD,
+        ITEM_DEL,
+        ELK_ADD,
+        ACCEPT,
+        CANCEL,
+    }; }
+    namespace GC { enum : uint8_t {
+        START,
+        ITEM_ADD,
+        ITEM_DEL,
+        ELK_ADD,
+        ACCEPT,
+        END,
+        ALREADY,
+        LESS_ELK,
+    }; }
+}
+
+namespace MessengerSub {
+    namespace CG { enum : uint8_t {
+        ADD_BY_VID,
+        ADD_BY_NAME,
+        REMOVE,
+    }; }
+    namespace GC { enum : uint8_t {
+        LIST,
+        LOGIN,
+        LOGOUT,
+        INVITE,
+        REMOVE_FRIEND,
+    }; }
+}
+
+namespace FishingSub {
+    namespace GC { enum : uint8_t {
+        START,
+        STOP,
+        REACT,
+        SUCCESS,
+        FAIL,
+        FISH,
+    }; }
+}
+
+namespace DungeonSub {
+    namespace GC { enum : uint8_t {
+        TIME_ATTACK_START = 0,
+        DESTINATION_POSITION = 1,
+    }; }
+}
+
+namespace DragonSoulSub { enum : uint8_t {
+    OPEN,
+    CLOSE,
+    DO_UPGRADE,
+    DO_IMPROVEMENT,
+    DO_REFINE,
+    REFINE_FAIL,
+    REFINE_FAIL_MAX_REFINE,
+    REFINE_FAIL_INVALID_MATERIAL,
+    REFINE_FAIL_NOT_ENOUGH_MONEY,
+    REFINE_FAIL_NOT_ENOUGH_MATERIAL,
+    REFINE_FAIL_TOO_MUCH_MATERIAL,
+    REFINE_SUCCEED,
+}; }
 
 enum
 {
@@ -366,33 +487,38 @@ enum
 // Mark
 typedef struct command_mark_login
 {
-    uint8_t    header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t   handle;
     uint32_t   random_key;
 } TPacketCGMarkLogin;
 
 typedef struct command_mark_upload
 {
-    uint8_t    header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t   gid;
     uint8_t    image[16*12*4];
 } TPacketCGMarkUpload;
 
 typedef struct command_mark_idxlist
 {
-    uint8_t    header;
+    uint16_t	header;
+    uint16_t	length;
 } TPacketCGMarkIDXList;
 
 typedef struct command_mark_crclist
 {
-    uint8_t    header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t    imgIdx;
     uint32_t   crclist[80];
 } TPacketCGMarkCRCList;
 
 typedef struct packet_mark_idxlist
 {
-    uint8_t    header;
+    uint16_t	header;
+    uint16_t	length;
 	uint32_t	bufSize;
     uint16_t    count;
     //뒤에 size * (uint16_t + uint16_t)만큼 데이터 붙음
@@ -400,7 +526,8 @@ typedef struct packet_mark_idxlist
 
 typedef struct packet_mark_block
 {
-    uint8_t    header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t   bufSize;
 	uint8_t	imgIdx;
     uint32_t   count;
@@ -409,21 +536,23 @@ typedef struct packet_mark_block
 
 typedef struct packet_mark_update
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t	guildID;
 	uint16_t	imgIdx;
 } TPacketGCMarkUpdate;
 
 typedef struct command_symbol_upload
 {
-	uint8_t	header;
-	uint16_t	size;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t	handle;
 } TPacketCGSymbolUpload;
 
 typedef struct command_symbol_crc
 {
-	uint8_t	header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t	dwGuildID;
 	uint32_t	dwCRC;
 	uint32_t	dwSize;
@@ -431,8 +560,8 @@ typedef struct command_symbol_crc
 
 typedef struct packet_symbol_data
 {
-    uint8_t header;
-    uint16_t size;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t guild_id;
 } TPacketGCGuildSymbolData;
 
@@ -441,7 +570,8 @@ typedef struct packet_symbol_data
 //
 typedef struct packet_observer_add
 {
-	uint8_t	header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t	vid;
 	uint16_t	x;
 	uint16_t	y;
@@ -449,7 +579,8 @@ typedef struct packet_observer_add
 
 typedef struct packet_observer_move
 {
-	uint8_t	header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t	vid;
 	uint16_t	x;
 	uint16_t	y;
@@ -458,7 +589,8 @@ typedef struct packet_observer_move
 
 typedef struct packet_observer_remove
 {
-	uint8_t	header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t	vid;	
 } TPacketGCObserverRemove;
 
@@ -468,7 +600,8 @@ typedef struct packet_observer_remove
 
 typedef struct command_checkin
 {
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 	char name[ID_MAX_NUM+1];
 	char pwd[PASS_MAX_NUM+1];
 } TPacketCGCheckin;
@@ -476,21 +609,24 @@ typedef struct command_checkin
 // start - 권한 서버 접속을 위한 패킷들
 typedef struct command_login2
 {
-	uint8_t	header;
+	uint16_t	header;
+	uint16_t	length;
 	char	name[ID_MAX_NUM + 1];
 	uint32_t	login_key;
 } TPacketCGLogin2;
 
 typedef struct command_login3
 {
-    uint8_t	header;
+    uint16_t	header;
+    uint16_t	length;
     char	name[ID_MAX_NUM + 1];
     char	pwd[PASS_MAX_NUM + 1];
 } TPacketCGLogin3;
 
 typedef struct command_direct_enter
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     char        login[ID_MAX_NUM + 1];
     char        passwd[PASS_MAX_NUM + 1];
     uint8_t        index;
@@ -498,13 +634,15 @@ typedef struct command_direct_enter
 
 typedef struct command_player_select
 {
-	uint8_t	header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t	player_index;
 } TPacketCGSelectCharacter;
 
 typedef struct command_attack
 {
-	uint8_t	header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t	bType;			// 공격 유형
 	uint32_t	dwVictimVID;	// 적 VID
 	uint8_t	bCRCMagicCubeProcPiece;
@@ -513,24 +651,17 @@ typedef struct command_attack
 
 typedef struct command_chat
 {
-	uint8_t	header;
+	uint16_t	header;
 	uint16_t	length;
 	uint8_t	type;
 } TPacketCGChat;
 
 typedef struct command_whisper
 {
-    uint8_t        bHeader;
-    uint16_t        wSize;
+    uint16_t	header;
+    uint16_t	length;
     char        szNameTo[CHARACTER_NAME_MAX_LEN + 1];
 } TPacketCGWhisper;
-
-typedef struct command_sms
-{
-    uint8_t        bHeader;
-    uint16_t        wSize;
-    char        szNameTo[CHARACTER_NAME_MAX_LEN + 1];
-} TPacketCGSMS;
 
 enum EBattleMode
 {
@@ -540,32 +671,37 @@ enum EBattleMode
 
 typedef struct command_EnterFrontGame
 {
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 } TPacketCGEnterFrontGame;
 
 typedef struct command_item_use
 {
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 	TItemPos pos;
 } TPacketCGItemUse;
 
 typedef struct command_item_use_to_item
 {
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 	TItemPos source_pos;
 	TItemPos target_pos;
 } TPacketCGItemUseToItem;
 
 typedef struct command_item_drop
 {
-	uint8_t  header;
+	uint16_t	header;
+	uint16_t	length;
 	TItemPos pos;
 	uint32_t elk;
 } TPacketCGItemDrop;
 
 typedef struct command_item_drop2
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     TItemPos pos;
     uint32_t       gold;
     uint8_t        count;
@@ -573,7 +709,8 @@ typedef struct command_item_drop2
 
 typedef struct command_item_move
 {
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 	TItemPos pos;
 	TItemPos change_pos;
 	uint8_t num;
@@ -581,64 +718,53 @@ typedef struct command_item_move
 
 typedef struct command_item_pickup
 {
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t vid;
 } TPacketCGItemPickUp;
 
 typedef struct command_quickslot_add
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        pos;
 	TQuickSlot	slot;
 }TPacketCGQuickSlotAdd;
 
 typedef struct command_quickslot_del
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        pos;
 }TPacketCGQuickSlotDel;
 
 typedef struct command_quickslot_swap
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        pos;
     uint8_t        change_pos;
 }TPacketCGQuickSlotSwap;
 
 typedef struct command_on_click
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t		vid;
 } TPacketCGOnClick;
 
 
-enum
-{
-    SHOP_SUBHEADER_CG_END,
-	SHOP_SUBHEADER_CG_BUY,
-	SHOP_SUBHEADER_CG_SELL,
-	SHOP_SUBHEADER_CG_SELL2,
-};
-
 typedef struct command_shop
 {
-	uint8_t        header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t		subheader;
 } TPacketCGShop;
 
-enum
-{
-	EXCHANGE_SUBHEADER_CG_START,			// arg1 == vid of target character
-	EXCHANGE_SUBHEADER_CG_ITEM_ADD,		// arg1 == position of item
-	EXCHANGE_SUBHEADER_CG_ITEM_DEL,		// arg1 == position of item
-	EXCHANGE_SUBHEADER_CG_ELK_ADD,			// arg1 == amount of elk
-	EXCHANGE_SUBHEADER_CG_ACCEPT,			// arg1 == not used
-	EXCHANGE_SUBHEADER_CG_CANCEL,			// arg1 == not used
-};
-
 typedef struct command_exchange
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t		subheader;
 	uint32_t		arg1;
 	uint8_t		arg2;
@@ -647,37 +773,42 @@ typedef struct command_exchange
 
 typedef struct command_position
 {   
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        position;
 } TPacketCGPosition;
 
 typedef struct command_script_answer
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
 	uint8_t		answer;
 } TPacketCGScriptAnswer;
 
 typedef struct command_script_button
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
 	uint32_t		idx;
 } TPacketCGScriptButton;
 
 typedef struct command_target
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t       dwVID;
 } TPacketCGTarget;
 
 typedef struct command_move
 {
-	uint8_t		bHeader;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t		bFunc;
 	uint8_t		bArg;
 	uint8_t		bRot;
-	uint32_t		lX;
-	uint32_t		lY;
-	uint32_t		dwTime;	
+	int32_t		lX;		// Signed to match server (can be negative coordinates)
+	int32_t		lY;		// Signed to match server
+	uint32_t	dwTime;
 } TPacketCGMove;
 
 typedef struct command_sync_position_element 
@@ -689,13 +820,14 @@ typedef struct command_sync_position_element
 
 typedef struct command_sync_position
 { 
-    uint8_t        bHeader;
-	uint16_t		wSize;
+    uint16_t	header;
+    uint16_t	length;
 } TPacketCGSyncPosition; 
 
 typedef struct command_fly_targeting
 {
-	uint8_t		bHeader;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t		dwTargetVID;
 	int32_t		lX;
 	int32_t		lY;
@@ -703,7 +835,8 @@ typedef struct command_fly_targeting
 
 typedef struct packet_fly_targeting
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
 	uint32_t		dwShooterVID;
 	uint32_t		dwTargetVID;
 	int32_t		lX;
@@ -712,29 +845,21 @@ typedef struct packet_fly_targeting
 
 typedef struct packet_shoot
 {   
-    uint8_t		bHeader;                
+    uint16_t	header;
+    uint16_t	length;
     uint8_t		bType;
 } TPacketCGShoot;
 
 typedef struct command_warp
 {
-	uint8_t			bHeader;
+	uint16_t	header;
+	uint16_t	length;
 } TPacketCGWarp;
-
-enum
-{
-	MESSENGER_SUBHEADER_GC_LIST,
-	MESSENGER_SUBHEADER_GC_LOGIN,
-	MESSENGER_SUBHEADER_GC_LOGOUT,
-	MESSENGER_SUBHEADER_GC_INVITE,
-	MESSENGER_SUBHEADER_GC_MOBILE,
-	MESSENGER_SUBHEADER_GC_REMOVE_FRIEND
-};
 
 typedef struct packet_messenger
 {
-    uint8_t header;
-    uint16_t size;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t subheader;
 } TPacketGCMessenger;
 
@@ -748,7 +873,6 @@ enum
 {
 	MESSENGER_CONNECTED_STATE_OFFLINE,
 	MESSENGER_CONNECTED_STATE_ONLINE,
-	MESSENGER_CONNECTED_STATE_MOBILE,
 };
 
 typedef struct packet_messenger_list_online
@@ -770,16 +894,10 @@ typedef struct packet_messenger_logout
 	uint8_t length;
 } TPacketGCMessengerLogout;
 
-enum
-{
-    MESSENGER_SUBHEADER_CG_ADD_BY_VID,
-    MESSENGER_SUBHEADER_CG_ADD_BY_NAME,
-    MESSENGER_SUBHEADER_CG_REMOVE,
-};
-
 typedef struct command_messenger
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t subheader;
 } TPacketCGMessenger;
 
@@ -796,28 +914,32 @@ enum
 
 typedef struct command_safebox_money
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        bState;
     uint32_t       dwMoney;
 } TPacketCGSafeboxMoney;
 
 typedef struct command_safebox_checkout
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        bSafePos;
     TItemPos	ItemPos;
 } TPacketCGSafeboxCheckout;
 
 typedef struct command_safebox_checkin
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        bSafePos;
     TItemPos	ItemPos;
 } TPacketCGSafeboxCheckin;
 
 typedef struct command_mall_checkout
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        bMallPos;
     TItemPos	ItemPos;
 } TPacketCGMallCheckout;
@@ -827,33 +949,38 @@ typedef struct command_mall_checkout
 
 typedef struct command_use_skill
 {
-    uint8_t                bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t               dwVnum;
 	uint32_t				dwTargetVID;
 } TPacketCGUseSkill;
 
 typedef struct command_party_invite
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t vid;
 } TPacketCGPartyInvite;
 
 typedef struct command_party_invite_answer
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t leader_pid;
     uint8_t accept;
 } TPacketCGPartyInviteAnswer;
 
 typedef struct command_party_remove
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t pid;
 } TPacketCGPartyRemove;
 
 typedef struct command_party_set_state
 {
-    uint8_t byHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t dwVID;
 	uint8_t byState;
     uint8_t byFlag;
@@ -861,59 +988,46 @@ typedef struct command_party_set_state
 
 typedef struct packet_party_link
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t pid;
     uint32_t vid;
 } TPacketGCPartyLink;
 
 typedef struct packet_party_unlink
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t pid;
 	uint32_t vid;
 } TPacketGCPartyUnlink;
 
 typedef struct command_party_use_skill
 {
-    uint8_t byHeader;
+    uint16_t	header;
+    uint16_t	length;
 	uint8_t bySkillIndex;
     uint32_t dwTargetVID;
 } TPacketCGPartyUseSkill;
 
-enum
-{
-	GUILD_SUBHEADER_CG_ADD_MEMBER,
-	GUILD_SUBHEADER_CG_REMOVE_MEMBER,
-	GUILD_SUBHEADER_CG_CHANGE_GRADE_NAME,
-	GUILD_SUBHEADER_CG_CHANGE_GRADE_AUTHORITY,
-	GUILD_SUBHEADER_CG_OFFER,
-	GUILD_SUBHEADER_CG_POST_COMMENT,
-	GUILD_SUBHEADER_CG_DELETE_COMMENT,
-	GUILD_SUBHEADER_CG_REFRESH_COMMENT,
-	GUILD_SUBHEADER_CG_CHANGE_MEMBER_GRADE,
-	GUILD_SUBHEADER_CG_USE_SKILL,
-	GUILD_SUBHEADER_CG_CHANGE_MEMBER_GENERAL,
-	GUILD_SUBHEADER_CG_GUILD_INVITE_ANSWER,
-	GUILD_SUBHEADER_CG_CHARGE_GSP,
-	GUILD_SUBHEADER_CG_DEPOSIT_MONEY,
-	GUILD_SUBHEADER_CG_WITHDRAW_MONEY,
-};
-
 typedef struct command_guild
 {
-    uint8_t byHeader;
+    uint16_t	header;
+    uint16_t	length;
 	uint8_t bySubHeader;
 } TPacketCGGuild;
 
 typedef struct command_guild_answer_make_guild
 {
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 	char guild_name[GUILD_NAME_MAX_LEN+1];
 } TPacketCGAnswerMakeGuild; 
 
 typedef struct command_give_item
 {
-	uint8_t byHeader;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t dwTargetVID;
 	TItemPos ItemPos;
 	uint8_t byItemCount;
@@ -921,14 +1035,15 @@ typedef struct command_give_item
 
 typedef struct SPacketCGHack
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     char        szBuf[255 + 1];
 } TPacketCGHack;
 
 typedef struct command_dungeon
 {
-	uint8_t		bHeader;
-	uint16_t		size;
+	uint16_t	header;
+	uint16_t	length;
 } TPacketCGDungeon;
 
 // Private Shop
@@ -944,42 +1059,40 @@ typedef struct SShopItemTable
 
 typedef struct SPacketCGMyShop
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     char        szSign[SHOP_SIGN_MAX_LEN + 1];
     uint8_t        bCount;	// count of TShopItemTable, max 39
 } TPacketCGMyShop;
 
 typedef struct SPacketCGRefine
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t		pos;
 	uint8_t		type;
 } TPacketCGRefine;
 
 typedef struct SPacketCGChangeName
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t index;
     char name[CHARACTER_NAME_MAX_LEN+1];
 } TPacketCGChangeName;
 
 typedef struct command_client_version
 {
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 	char filename[32+1];
 	char timestamp[32+1];
 } TPacketCGClientVersion;
 
-typedef struct command_client_version2
-{
-	uint8_t header;
-	char filename[32+1];
-	char timestamp[32+1];
-} TPacketCGClientVersion2;
-
 typedef struct command_crc_report
 {
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t byPackMode;
 	uint32_t dwBinaryCRC32;
 	uint32_t dwProcessCRC32;
@@ -994,88 +1107,54 @@ enum EPartyExpDistributionType
 
 typedef struct command_party_parameter
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        bDistributeMode;
 } TPacketCGPartyParameter;
 
 typedef struct command_quest_input_string
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     char		szString[QUEST_INPUT_STRING_MAX_NUM+1];
 } TPacketCGQuestInputString;
 
 typedef struct command_quest_confirm
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t answer;
     uint32_t requestPID;
 } TPacketCGQuestConfirm;
 
 typedef struct command_quest_cancel
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
 } TPacketCGQuestCancel;
 
 typedef struct command_script_select_item
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t selection;
 } TPacketCGScriptSelectItem;
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// From Server
-enum EPhase
-{
-    PHASE_CLOSE,				// 끊기는 상태 (또는 끊기 전 상태)
-    PHASE_HANDSHAKE,			// 악수..;;
-    PHASE_LOGIN,				// 로그인 중
-    PHASE_SELECT,				// 캐릭터 선택 화면
-    PHASE_LOADING,				// 선택 후 로딩 화면
-    PHASE_GAME,					// 게임 화면
-    PHASE_DEAD,					// 죽었을 때.. (게임 안에 있는 것일 수도..)
 
-	PHASE_DBCLIENT_CONNECTING,	// 서버용
-    PHASE_DBCLIENT,				// 서버용
-    PHASE_P2P,					// 서버용
-    PHASE_AUTH,					// 로그인 인증 용
-};
+// TPacketGCPhase moved to EterLib/ControlPackets.h
 
-typedef struct packet_phase
+typedef struct packet_blank
 {
-    uint8_t        header;
-    uint8_t        phase;
-} TPacketGCPhase;
-
-typedef struct packet_blank		// 공백패킷.
-{
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 } TPacketGCBlank;
 
-typedef struct packet_blank_dynamic
-{
-	uint8_t		header;
-	uint16_t		size;
-} TPacketGCBlankDynamic;
-
-typedef struct packet_header_handshake
-{
-	uint8_t		header;
-	uint32_t		dwHandshake;
-	uint32_t		dwTime;
-	int32_t		lDelta;
-} TPacketGCHandshake;
-
-typedef struct packet_header_bindudp
-{
-	uint8_t		header;
-	uint32_t		addr;
-	uint16_t		port;
-} TPacketGCBindUDP;
+typedef TPacketGCBlank TPacketGCBlankDynamic;
 
 typedef struct packet_header_dynamic_size
 {
-	uint8_t		header;
-	uint16_t		size;
+	uint16_t	header;
+	uint16_t	length;
 } TDynamicSizePacketHeader;
 
 typedef struct SSimplePlayerInformation
@@ -1099,7 +1178,8 @@ typedef struct SSimplePlayerInformation
 
 typedef struct packet_login_success3
 {
-	uint8_t						header;
+	uint16_t	header;
+	uint16_t	length;
 	TSimplePlayerInformation	akSimplePlayerInformation[PLAYER_PER_ACCOUNT3];
     uint32_t						guild_id[PLAYER_PER_ACCOUNT3];
     char						guild_name[PLAYER_PER_ACCOUNT3][GUILD_NAME_MAX_LEN+1];
@@ -1109,7 +1189,8 @@ typedef struct packet_login_success3
 
 typedef struct packet_login_success4
 {
-	uint8_t						header;
+	uint16_t	header;
+	uint16_t	length;
 	TSimplePlayerInformation	akSimplePlayerInformation[PLAYER_PER_ACCOUNT4];
     uint32_t						guild_id[PLAYER_PER_ACCOUNT4];
     char						guild_name[PLAYER_PER_ACCOUNT4][GUILD_NAME_MAX_LEN+1];
@@ -1121,13 +1202,15 @@ typedef struct packet_login_success4
 enum { LOGIN_STATUS_MAX_LEN = 8 };
 typedef struct packet_login_failure
 {
-	uint8_t	header;
+	uint16_t	header;
+	uint16_t	length;
 	char	szStatus[LOGIN_STATUS_MAX_LEN + 1];
 } TPacketGCLoginFailure;
 
 typedef struct command_player_create
 {
-	uint8_t        header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t        index;
 	char        name[CHARACTER_NAME_MAX_LEN + 1];
 	uint16_t        job;
@@ -1140,27 +1223,31 @@ typedef struct command_player_create
 
 typedef struct command_player_create_success
 {
-    uint8_t						header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t						bAccountCharacterSlot;
     TSimplePlayerInformation	kSimplePlayerInfomation;
 } TPacketGCPlayerCreateSuccess;
 
 typedef struct command_create_failure
 {
-	uint8_t	header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t	bType;
 } TPacketGCCreateFailure;
 
 typedef struct command_player_delete
 {
-	uint8_t        header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t        index;
 	char		szPrivateCode[PRIVATE_CODE_LENGTH];
 } TPacketCGDestroyCharacter;
 
 typedef struct packet_player_delete_success
 {
-	uint8_t        header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t        account_index;
 } TPacketGCDestroyCharacterSuccess;
 
@@ -1196,7 +1283,8 @@ enum ECharacterEquipmentPart
 
 typedef struct packet_char_additional_info
 {
-	uint8_t    header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t   dwVID;
 	char    name[CHARACTER_NAME_MAX_LEN + 1];
 	uint16_t    awPart[CHR_EQUIPPART_NUM];
@@ -1210,7 +1298,8 @@ typedef struct packet_char_additional_info
 
 typedef struct packet_add_char
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
 
     uint32_t       dwVID;
 
@@ -1238,7 +1327,8 @@ typedef struct packet_add_char
 
 typedef struct packet_add_char2
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
 
     uint32_t       dwVID;
 
@@ -1267,7 +1357,8 @@ typedef struct packet_add_char2
 
 typedef struct packet_update_char
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t       dwVID;
 
     uint16_t        awPart[CHR_EQUIPPART_NUM];
@@ -1285,7 +1376,8 @@ typedef struct packet_update_char
 
 typedef struct packet_update_char2
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t       dwVID;
 
     uint16_t        awPart[CHR_EQUIPPART_NUM];
@@ -1303,13 +1395,15 @@ typedef struct packet_update_char2
 
 typedef struct packet_del_char
 {
-	uint8_t	header;
+	uint16_t	header;
+	uint16_t	length;
     uint32_t	dwVID;
 } TPacketGCCharacterDelete;
 
 typedef struct packet_GlobalTime
 {
-	uint8_t	header;
+	uint16_t	header;
+	uint16_t	length;
 	float	GlobalTime;
 } TPacketGCGlobalTime;
 
@@ -1329,8 +1423,8 @@ enum EChatType
 
 typedef struct packet_chatting
 {
-	uint8_t	header;
-	uint16_t	size;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t	type;
 	uint32_t	dwVID;
 	uint8_t	bEmpire;
@@ -1338,79 +1432,41 @@ typedef struct packet_chatting
 
 typedef struct packet_whisper   // 가변 패킷    
 {   
-    uint8_t        bHeader;                        
-    uint16_t        wSize;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        bType;
     char        szNameFrom[CHARACTER_NAME_MAX_LEN + 1];
 } TPacketGCWhisper;
 
 typedef struct packet_stun
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t		vid;
 } TPacketGCStun;
 
 typedef struct packet_dead
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t		vid;
 } TPacketGCDead;
 
 typedef struct packet_main_character
 {
-    uint8_t        header;
-    uint32_t       dwVID;
-	uint16_t		wRaceNum;
-    char        szName[CHARACTER_NAME_MAX_LEN + 1];
-    int32_t        lX, lY, lZ;
+	enum { MUSIC_NAME_MAX_LEN = 24 };
+
+	uint16_t	header;
+	uint16_t	length;
+	uint32_t	dwVID;
+	uint16_t	wRaceNum;
+	char		szName[CHARACTER_NAME_MAX_LEN + 1];
+	char		szBGMName[MUSIC_NAME_MAX_LEN + 1];
+	float		fBGMVol;
+	int32_t		lX, lY, lZ;
+	uint8_t		byEmpire;
 	uint8_t		bySkillGroup;
 } TPacketGCMainCharacter;
-
-// SUPPORT_BGM
-typedef struct packet_main_character2_empire
-{
-    uint8_t        header;
-    uint32_t       dwVID;
-	uint16_t		wRaceNum;
-    char        szName[CHARACTER_NAME_MAX_LEN + 1];
-    int32_t        lX, lY, lZ;
-	uint8_t		byEmpire;
-	uint8_t		bySkillGroup;
-} TPacketGCMainCharacter2_EMPIRE;
-
-typedef struct packet_main_character3_bgm
-{
-	enum
-	{
-		MUSIC_NAME_MAX_LEN = 24,
-	};
-    uint8_t        header;
-    uint32_t       dwVID;
-	uint16_t		wRaceNum;
-    char        szUserName[CHARACTER_NAME_MAX_LEN + 1];
-	char        szBGMName[MUSIC_NAME_MAX_LEN + 1];
-    int32_t        lX, lY, lZ;
-	uint8_t		byEmpire;
-	uint8_t		bySkillGroup;
-} TPacketGCMainCharacter3_BGM;
-
-typedef struct packet_main_character4_bgm_vol
-{
-	enum
-	{
-		MUSIC_NAME_MAX_LEN = 24,
-	};
-    uint8_t        header;
-    uint32_t       dwVID;
-	uint16_t		wRaceNum;
-    char        szUserName[CHARACTER_NAME_MAX_LEN + 1];
-	char        szBGMName[MUSIC_NAME_MAX_LEN + 1];
-	float		fBGMVol;
-    int32_t        lX, lY, lZ;
-	uint8_t		byEmpire;
-	uint8_t		bySkillGroup;
-} TPacketGCMainCharacter4_BGM_VOL;
-// END_OF_SUPPORT_BGM
 
 enum EPointTypes
 {
@@ -1583,13 +1639,15 @@ enum EPointTypes
 
 typedef struct packet_points
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     int32_t        points[POINT_MAX_NUM];
 } TPacketGCPoints;
 
 typedef struct packet_point_change
 {
-    int32_t         header;
+    uint16_t	header;
+    uint16_t	length;
 
 	uint32_t		dwVID;
 	uint8_t		Type;
@@ -1600,7 +1658,8 @@ typedef struct packet_point_change
 
 typedef struct packet_motion
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t		vid;
 	uint32_t		victim_vid;
 	uint16_t		motion;
@@ -1608,13 +1667,15 @@ typedef struct packet_motion
 
 typedef struct packet_del_item
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	TItemPos	pos;
 } TPacketGCItemDel;
 
 typedef struct packet_set_item
 {
-	uint8_t					header;
+	uint16_t	header;
+	uint16_t	length;
 	TItemPos				pos;
 	uint32_t				vnum;
 	uint8_t					count;
@@ -1627,7 +1688,8 @@ typedef struct packet_set_item
 
 typedef struct packet_item_get
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t	dwItemVnum;
 	uint8_t		bCount;
 	uint8_t		bArg;		// 0: normal, 1: from party member
@@ -1636,7 +1698,8 @@ typedef struct packet_item_get
 
 typedef struct packet_use_item
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	TItemPos	Cell;
 	uint32_t		ch_vid;
 	uint32_t		victim_vid;
@@ -1646,7 +1709,8 @@ typedef struct packet_use_item
 
 typedef struct packet_update_item
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	TItemPos	Cell;
 	uint8_t		count;
 	int32_t		alSockets[ITEM_SOCKET_SLOT_MAX_NUM];
@@ -1655,7 +1719,8 @@ typedef struct packet_update_item
 
 typedef struct packet_ground_add_item
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     int32_t        lX;
 	int32_t		lY;
 	int32_t		lZ;
@@ -1666,33 +1731,38 @@ typedef struct packet_ground_add_item
 
 typedef struct packet_ground_del_item
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t		vid;
 } TPacketGCItemGroundDel;
 
 typedef struct packet_item_ownership
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t       dwVID;
     char        szName[CHARACTER_NAME_MAX_LEN + 1];
 } TPacketGCItemOwnership;
 
 typedef struct packet_quickslot_add
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        pos;
 	TQuickSlot	slot;
 } TPacketGCQuickSlotAdd;
 
 typedef struct packet_quickslot_del
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        pos;
 } TPacketGCQuickSlotDel;
 
 typedef struct packet_quickslot_swap
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        pos;
     uint8_t        change_pos;
 } TPacketGCQuickSlotSwap;
@@ -1726,32 +1796,17 @@ typedef struct packet_shop_update_price
 	int32_t iElkAmount;
 } TPacketGCShopUpdatePrice;
 
-enum EPacketShopSubHeaders
-{
-	SHOP_SUBHEADER_GC_START,
-    SHOP_SUBHEADER_GC_END,
-	SHOP_SUBHEADER_GC_UPDATE_ITEM,
-	SHOP_SUBHEADER_GC_UPDATE_PRICE,
-    SHOP_SUBHEADER_GC_OK,
-    SHOP_SUBHEADER_GC_NOT_ENOUGH_MONEY,
-    SHOP_SUBHEADER_GC_SOLDOUT,
-    SHOP_SUBHEADER_GC_INVENTORY_FULL,
-    SHOP_SUBHEADER_GC_INVALID_POS,
-	SHOP_SUBHEADER_GC_SOLD_OUT,
-	SHOP_SUBHEADER_GC_START_EX,
-	SHOP_SUBHEADER_GC_NOT_ENOUGH_MONEY_EX,
-};
-
 typedef struct packet_shop
 {
-	uint8_t        header;
-	uint16_t		size;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t        subheader;
 } TPacketGCShop;
 
 typedef struct packet_exchange
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        subheader;
     uint8_t        is_me;
     uint32_t       arg1;
@@ -1761,54 +1816,36 @@ typedef struct packet_exchange
     TPlayerItemAttribute aAttr[ITEM_ATTRIBUTE_SLOT_MAX_NUM];
 } TPacketGCExchange;
 
-enum
-{
-    EXCHANGE_SUBHEADER_GC_START,			// arg1 == vid
-    EXCHANGE_SUBHEADER_GC_ITEM_ADD,		// arg1 == vnum  arg2 == pos  arg3 == count
-	EXCHANGE_SUBHEADER_GC_ITEM_DEL,		// arg1 == pos
-    EXCHANGE_SUBHEADER_GC_ELK_ADD,			// arg1 == elk
-    EXCHANGE_SUBHEADER_GC_ACCEPT,			// arg1 == accept
-    EXCHANGE_SUBHEADER_GC_END,				// arg1 == not used
-    EXCHANGE_SUBHEADER_GC_ALREADY,			// arg1 == not used
-    EXCHANGE_SUBHEADER_GC_LESS_ELK,		// arg1 == not used
-};
-
 typedef struct packet_position
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
 	uint32_t		vid;
     uint8_t        position;
 } TPacketGCPosition;
 
-typedef struct packet_ping
-{
-	uint8_t		header;
-} TPacketGCPing;
-
-typedef struct packet_pong
-{
-	uint8_t		bHeader;
-	uint8_t		bSequence;
-} TPacketCGPong;
+// TPacketGCPing, TPacketCGPong moved to EterLib/ControlPackets.h
 
 typedef struct packet_script
 {
-    uint8_t		header;
-    uint16_t        size;
+    uint16_t	header;
+    uint16_t	length;
 	uint8_t		skin;
     uint16_t        src_size;
 } TPacketGCScript;
 
 typedef struct packet_target
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t       dwVID;
     uint8_t        bHPPercent;
 } TPacketGCTarget;
 
 typedef struct packet_damage_info
 {
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t dwVID;
 	uint8_t flag;
 	int32_t  damage;
@@ -1816,7 +1853,8 @@ typedef struct packet_damage_info
 
 typedef struct packet_mount
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t       vid;
     uint32_t       mount_vid;
     uint8_t        pos;
@@ -1825,14 +1863,16 @@ typedef struct packet_mount
 
 typedef struct packet_change_speed
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t		vid;
 	uint16_t		moving_speed;
 } TPacketGCChangeSpeed;
 
 typedef struct packet_move
 {	
-	uint8_t		bHeader;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t		bFunc;
 	uint8_t		bArg;
 	uint8_t		bRot;
@@ -1856,15 +1896,16 @@ enum
 
 typedef struct packet_quest_info
 {
-	uint8_t header;
-	uint16_t size;
+	uint16_t	header;
+	uint16_t	length;
 	uint16_t index;
 	uint8_t flag;
 } TPacketGCQuestInfo;
 
 typedef struct packet_quest_confirm
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     char msg[64+1];
     int32_t timeout;
     uint32_t requestPID;
@@ -1872,7 +1913,8 @@ typedef struct packet_quest_confirm
 
 typedef struct packet_attack
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t       dwVID;
     uint32_t       dwVictimVID;    // 적 VID
     uint8_t        bType;          // 공격 유형
@@ -1880,8 +1922,8 @@ typedef struct packet_attack
 
 typedef struct packet_c2c
 {
-	uint8_t		header;
-	uint16_t		wSize;
+	uint16_t	header;
+	uint16_t	length;
 } TPacketGCC2C;
 
 typedef struct packetd_sync_position_element 
@@ -1893,13 +1935,14 @@ typedef struct packetd_sync_position_element
 
 typedef struct packetd_sync_position
 { 
-    uint8_t        bHeader; 
-    uint16_t		wSize;
+    uint16_t	header;
+    uint16_t	length;
 } TPacketGCSyncPosition; 
 
 typedef struct packet_ownership 
 { 
-    uint8_t                bHeader; 
+    uint16_t	header;
+    uint16_t	length;
     uint32_t               dwOwnerVID; 
     uint32_t               dwVictimVID; 
 } TPacketGCOwnership; 
@@ -1908,7 +1951,8 @@ typedef struct packet_ownership
 
 typedef struct packet_skill_level
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        abSkillLevels[SKILL_MAX_NUM];
 } TPacketGCSkillLevel;
 
@@ -1921,14 +1965,16 @@ typedef struct SPlayerSkill
 
 typedef struct packet_skill_level_new
 {
-	uint8_t bHeader;
+	uint16_t	header;
+	uint16_t	length;
 	TPlayerSkill skills[SKILL_MAX_NUM];
 } TPacketGCSkillLevelNew;
 
 // fly
 typedef struct packet_fly
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        bType;
     uint32_t       dwStartVID;
     uint32_t       dwEndVID;
@@ -1944,13 +1990,14 @@ enum EPVPModes
 
 typedef struct packet_duel_start
 {
-    uint8_t	header ;
-    uint16_t	wSize ;	// uint32_t가 몇개? 개수 = (wSize - sizeof(TPacketGCPVPList)) / 4
+    uint16_t	header;
+    uint16_t	length;
 } TPacketGCDuelStart ;
 
 typedef struct packet_pvp
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t		dwVIDSrc;
 	uint32_t		dwVIDDst;
 	uint8_t		bMode;
@@ -1958,13 +2005,15 @@ typedef struct packet_pvp
 
 typedef struct packet_skill_cooltime_end
 {
-	uint8_t		header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t		bSkill;
 } TPacketGCSkillCoolTimeEnd;
 
 typedef struct packet_warp
 {
-	uint8_t			bHeader;
+	uint16_t	header;
+	uint16_t	length;
 	int32_t			lX;
 	int32_t			lY;
 	int32_t			lAddr;
@@ -1973,20 +2022,23 @@ typedef struct packet_warp
 
 typedef struct packet_party_invite
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t leader_pid;
 } TPacketGCPartyInvite;
 
 typedef struct packet_party_add
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t pid;
     char name[CHARACTER_NAME_MAX_LEN+1];
 } TPacketGCPartyAdd;
 
 typedef struct packet_party_update
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t pid;
     uint8_t state;
     uint8_t percent_hp;
@@ -1995,7 +2047,8 @@ typedef struct packet_party_update
 
 typedef struct packet_party_remove
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t pid;
 } TPacketGCPartyRemove;
 
@@ -2004,46 +2057,49 @@ typedef TPacketCGSafeboxCheckin TPacketGCSafeboxCheckin;
 
 typedef struct packet_safebox_wrong_password
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
 } TPacketGCSafeboxWrongPassword;
 
 typedef struct packet_safebox_size
 {
-	uint8_t bHeader;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t bSize;
 } TPacketGCSafeboxSize; 
 
 typedef struct packet_safebox_money_change
 {
-    uint8_t bHeader;
-    uint32_t dwMoney;
+    uint16_t	header;
+    uint16_t	length;
+    int32_t lMoney;		// Signed to match server (uses int32_t lMoney)
 } TPacketGCSafeboxMoneyChange;
 
 typedef struct command_empire
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        bEmpire;
 } TPacketCGEmpire;
 
 typedef struct packet_empire
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        bEmpire;
 } TPacketGCEmpire;
 
-enum
+typedef struct command_fishing
 {
-	FISHING_SUBHEADER_GC_START,
-	FISHING_SUBHEADER_GC_STOP,
-	FISHING_SUBHEADER_GC_REACT,
-	FISHING_SUBHEADER_GC_SUCCESS,
-	FISHING_SUBHEADER_GC_FAIL,
-    FISHING_SUBHEADER_GC_FISH,
-};
+    uint16_t	header;
+    uint16_t	length;
+    uint8_t dir;
+} TPacketCGFishing;
 
 typedef struct packet_fishing
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t subheader;
     uint32_t info;
     uint8_t dir;
@@ -2051,42 +2107,18 @@ typedef struct packet_fishing
 
 typedef struct paryt_parameter
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        bDistributeMode;
 } TPacketGCPartyParameter;
 
 //////////////////////////////////////////////////////////////////////////
 // Guild
 
-enum
-{
-    GUILD_SUBHEADER_GC_LOGIN,
-	GUILD_SUBHEADER_GC_LOGOUT,
-	GUILD_SUBHEADER_GC_LIST,
-	GUILD_SUBHEADER_GC_GRADE,
-	GUILD_SUBHEADER_GC_ADD,
-	GUILD_SUBHEADER_GC_REMOVE,
-	GUILD_SUBHEADER_GC_GRADE_NAME,
-	GUILD_SUBHEADER_GC_GRADE_AUTH, 
-	GUILD_SUBHEADER_GC_INFO,
-	GUILD_SUBHEADER_GC_COMMENTS,
-    GUILD_SUBHEADER_GC_CHANGE_EXP,
-    GUILD_SUBHEADER_GC_CHANGE_MEMBER_GRADE,
-	GUILD_SUBHEADER_GC_SKILL_INFO,
-	GUILD_SUBHEADER_GC_CHANGE_MEMBER_GENERAL,
-	GUILD_SUBHEADER_GC_GUILD_INVITE,
-    GUILD_SUBHEADER_GC_WAR,
-    GUILD_SUBHEADER_GC_GUILD_NAME,
-    GUILD_SUBHEADER_GC_GUILD_WAR_LIST,
-    GUILD_SUBHEADER_GC_GUILD_WAR_END_LIST,
-    GUILD_SUBHEADER_GC_WAR_POINT,
-	GUILD_SUBHEADER_GC_MONEY_CHANGE,
-};
-
 typedef struct packet_guild
 {
-    uint8_t header;
-    uint16_t size;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t subheader;
 } TPacketGCGuild;
 
@@ -2160,31 +2192,26 @@ typedef struct SPacketGuildWarPoint
     int32_t lPoint;
 } TPacketGuildWarPoint;
 
-// SubHeader - Dungeon
-enum
-{
-	DUNGEON_SUBHEADER_GC_TIME_ATTACK_START = 0,
-	DUNGEON_SUBHEADER_GC_DESTINATION_POSITION = 1,
-};
-
 typedef struct packet_dungeon
 {
-	uint8_t		bHeader;
-    uint16_t		size;
+	uint16_t	header;
+	uint16_t	length;
     uint8_t		subheader;
 } TPacketGCDungeon;
 
 // Private Shop
 typedef struct SPacketGCShopSign
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t       dwVID;
     char        szSign[SHOP_SIGN_MAX_LEN + 1];
 } TPacketGCShopSign;
 
 typedef struct SPacketGCTime
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     time_t      time;
 } TPacketGCTime;
 
@@ -2196,14 +2223,16 @@ enum
 
 typedef struct SPacketGCWalkMode
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t       vid;
     uint8_t        mode;
 } TPacketGCWalkMode;
 
 typedef struct SPacketGCChangeSkillGroup
 {
-    uint8_t        header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t        skill_group;
 } TPacketGCChangeSkillGroup;
 
@@ -2225,14 +2254,16 @@ typedef struct SRefineTable
 
 typedef struct SPacketGCRefineInformation
 {
-	uint8_t			header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t			pos;
 	TRefineTable	refine_table;
 } TPacketGCRefineInformation;
 
 typedef struct SPacketGCRefineInformationNew
 {
-	uint8_t			header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t			type;
 	uint8_t			pos;
 	TRefineTable	refine_table;
@@ -2270,15 +2301,16 @@ enum SPECIAL_EFFECT
 
 typedef struct SPacketGCSpecialEffect
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t type;
     uint32_t vid;
 } TPacketGCSpecialEffect;
 
 typedef struct SPacketGCNPCPosition
 {
-    uint8_t header;
-	uint16_t size;
+    uint16_t	header;
+    uint16_t	length;
     uint16_t count;
 } TPacketGCNPCPosition;
 
@@ -2293,7 +2325,8 @@ struct TNPCPosition
 
 typedef struct SPacketGCChangeName
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t pid;
     char name[CHARACTER_NAME_MAX_LEN+1];
 } TPacketGCChangeName;
@@ -2310,20 +2343,23 @@ enum EBlockAction
 
 typedef struct packet_login_key
 {
-	uint8_t	bHeader;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t	dwLoginKey;
 } TPacketGCLoginKey;
 
 typedef struct packet_auth_success
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t       dwLoginKey;
     uint8_t        bResult;
 } TPacketGCAuthSuccess;
 
 typedef struct packet_channel
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint8_t channel;
 } TPacketGCChannel;
 
@@ -2337,7 +2373,8 @@ typedef struct SEquipmentItemSet
 
 typedef struct pakcet_view_equip
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
 	uint32_t dwVID;
 	TEquipmentItemSet equips[WEAR_MAX_NUM];
 } TPacketGCViewEquip;
@@ -2352,13 +2389,14 @@ typedef struct
 
 typedef struct packet_land_list
 {
-    uint8_t        header;
-    uint16_t        size;
+    uint16_t	header;
+    uint16_t	length;
 } TPacketGCLandList;
 
 typedef struct
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     int32_t        lID;
     char        szTargetName[32+1];
 } TPacketGCTargetCreate;
@@ -2372,7 +2410,8 @@ enum
 
 typedef struct
 {
-	uint8_t		bHeader;
+	uint16_t	header;
+	uint16_t	length;
 	int32_t		lID;
 	char		szTargetName[32+1];
 	uint32_t		dwVID;
@@ -2381,14 +2420,16 @@ typedef struct
 
 typedef struct
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     int32_t        lID;
     int32_t        lX, lY;
 } TPacketGCTargetUpdate;
 
 typedef struct
 {
-    uint8_t        bHeader;
+    uint16_t	header;
+    uint16_t	length;
     int32_t        lID;
 } TPacketGCTargetDelete;
 
@@ -2404,39 +2445,45 @@ typedef struct
 
 typedef struct 
 {
-    uint8_t bHeader;
+    uint16_t	header;
+    uint16_t	length;
     TPacketAffectElement elem;
 } TPacketGCAffectAdd;
 
 typedef struct
 {
-    uint8_t bHeader;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t dwType;
     uint8_t bApplyOn;
 } TPacketGCAffectRemove;
 
 typedef struct packet_mall_open
 {
-	uint8_t bHeader;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t bSize;
 } TPacketGCMallOpen;
 
 typedef struct packet_lover_info
 {
-	uint8_t bHeader;
+	uint16_t	header;
+	uint16_t	length;
 	char szName[CHARACTER_NAME_MAX_LEN + 1];
 	uint8_t byLovePoint;
 } TPacketGCLoverInfo;
 
 typedef struct packet_love_point_update
 {
-	uint8_t bHeader;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t byLovePoint;
 } TPacketGCLovePointUpdate;
 
 typedef struct packet_dig_motion
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     uint32_t vid;
     uint32_t target_vid;
 	uint8_t count;
@@ -2444,13 +2491,15 @@ typedef struct packet_dig_motion
 
 typedef struct SPacketGCOnTime
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
     int32_t ontime;     // sec
 } TPacketGCOnTime;
 
 typedef struct SPacketGCResetOnTime
 {
-    uint8_t header;
+    uint16_t	header;
+    uint16_t	length;
 } TPacketGCResetOnTime;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2458,7 +2507,8 @@ typedef struct SPacketGCResetOnTime
 
 typedef struct packet_state
 {
-	uint8_t			bHeader;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t			bFunc;
 	uint8_t			bArg;
 	uint8_t			bRot;
@@ -2470,44 +2520,25 @@ typedef struct packet_state
 // AUTOBAN
 typedef struct packet_autoban_quiz
 {
-    uint8_t bHeader;
+    uint16_t	header;
+    uint16_t	length;
 	uint8_t bDuration;
     uint8_t bCaptcha[64*32];
     char szQuiz[256];
 } TPacketGCAutoBanQuiz;
 // END_OF_AUTOBAN
 
+// TPacketGCKeyChallenge, TPacketCGKeyResponse, TPacketGCKeyComplete
+// moved to EterLib/ControlPackets.h
+
 // Secure authentication packets (libsodium/XChaCha20-Poly1305)
 #pragma pack(push, 1)
-
-// Server -> Client: Key exchange challenge
-struct TPacketGCKeyChallenge
-{
-	uint8_t bHeader;           // HEADER_GC_KEY_CHALLENGE (0xf8)
-	uint8_t server_pk[32];     // Server's X25519 public key
-	uint8_t challenge[32];     // Random challenge bytes
-};
-
-// Client -> Server: Key exchange response
-struct TPacketCGKeyResponse
-{
-	uint8_t bHeader;           // HEADER_CG_KEY_RESPONSE (0xf9)
-	uint8_t client_pk[32];     // Client's X25519 public key
-	uint8_t challenge_response[32]; // HMAC(challenge, rx_key)
-};
-
-// Server -> Client: Key exchange complete
-struct TPacketGCKeyComplete
-{
-	uint8_t bHeader;           // HEADER_GC_KEY_COMPLETE (0xf7)
-	uint8_t encrypted_token[32 + 16]; // Session token + Poly1305 tag
-	uint8_t nonce[24];         // XChaCha20 nonce
-};
 
 // Client -> Server: Secure login
 struct TPacketCGLoginSecure
 {
-	uint8_t bHeader;           // HEADER_CG_LOGIN_SECURE (0xf6)
+	uint16_t	header; // CG::LOGIN_SECURE
+	uint16_t	length;
 	char name[ID_MAX_NUM + 1];
 	char pwd[PASS_MAX_NUM + 1];
 	uint8_t session_token[32]; // Session token from KeyComplete
@@ -2517,7 +2548,8 @@ struct TPacketCGLoginSecure
 
 typedef struct SPacketGCSpecificEffect
 {
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 	uint32_t vid;
 	char effect_file[128];
 } TPacketGCSpecificEffect;
@@ -2530,36 +2562,22 @@ enum EDragonSoulRefineWindowRefineType
 	DragonSoulRefineWindow_REFINE,
 };
 
-enum EPacketCGDragonSoulSubHeaderType
-{
-	DS_SUB_HEADER_OPEN,
-	DS_SUB_HEADER_CLOSE,
-	DS_SUB_HEADER_DO_UPGRADE,
-	DS_SUB_HEADER_DO_IMPROVEMENT,
-	DS_SUB_HEADER_DO_REFINE,
-	DS_SUB_HEADER_REFINE_FAIL,
-	DS_SUB_HEADER_REFINE_FAIL_MAX_REFINE,
-	DS_SUB_HEADER_REFINE_FAIL_INVALID_MATERIAL,
-	DS_SUB_HEADER_REFINE_FAIL_NOT_ENOUGH_MONEY,
-	DS_SUB_HEADER_REFINE_FAIL_NOT_ENOUGH_MATERIAL,
-	DS_SUB_HEADER_REFINE_FAIL_TOO_MUCH_MATERIAL,
-	DS_SUB_HEADER_REFINE_SUCCEED,
-};
-
 typedef struct SPacketCGDragonSoulRefine
 {
-	SPacketCGDragonSoulRefine() : header (HEADER_CG_DRAGON_SOUL_REFINE)
+	SPacketCGDragonSoulRefine() : header(CG::DRAGON_SOUL_REFINE), length(sizeof(SPacketCGDragonSoulRefine))
 	{}
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t bSubType;
 	TItemPos ItemGrid[DS_REFINE_WINDOW_MAX_NUM];
 } TPacketCGDragonSoulRefine;
 
 typedef struct SPacketGCDragonSoulRefine
 {
-	SPacketGCDragonSoulRefine() : header(HEADER_GC_DRAGON_SOUL_REFINE)
+	SPacketGCDragonSoulRefine() : header(GC::DRAGON_SOUL_REFINE), length(sizeof(SPacketGCDragonSoulRefine))
 	{}
-	uint8_t header;
+	uint16_t	header;
+	uint16_t	length;
 	uint8_t bSubType;
 	TItemPos Pos;
 } TPacketGCDragonSoulRefine;

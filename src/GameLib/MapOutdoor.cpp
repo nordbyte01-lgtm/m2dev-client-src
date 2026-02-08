@@ -565,61 +565,6 @@ bool CMapOutdoor::GetPickingPointWithRayOnlyTerrain(const CRay & rRay, D3DXVECTO
 	
 	return false;
 }
-/*
-{
-	bool bTerrainPick = false;
-	D3DXVECTOR3 v3TerrainPick;
-
-	CTerrain * pTerrain;
-
-	D3DXVECTOR3 v3Start, v3End, v3Dir, v3CurPos;
- 	float fRayRange;
-	rRay.GetStartPoint(&v3Start);
-	rRay.GetDirection(&v3Dir, &fRayRange);
-	rRay.GetEndPoint(&v3End);
-
-	Vector3d v3dStart, v3dEnd;
-	v3dStart.Set(v3Start.x, v3Start.y, v3Start.z);
-	v3dEnd.Set(v3End.x - v3Start.x, v3End.y - v3Start.y, v3End.z - v3Start.z);
-
-	float fAdd = 1.0f / fRayRange;
-
-	float ft = 0.0f;
-	while (ft < 1.0f)
-	{
-		D3DXVec3Lerp(&v3CurPos, &v3Start, &v3End, ft);
-		BYTE byTerrainNum;
-		float fMultiplier = 1.0f;
-		if (GetTerrainNum(v3CurPos.x, v3CurPos.y, &byTerrainNum))
-		{
-			if (GetTerrainPointer(byTerrainNum, &pTerrain))
-			{
-				int ix, iy;
-				PR_FLOAT_TO_INT(v3CurPos.x, ix);
-				PR_FLOAT_TO_INT(fabs(v3CurPos.y), iy);
-				float fMapHeight = pTerrain->GetHeight(ix, iy);
-				if ( fMapHeight >= v3CurPos.z)
-				{
-					bTerrainPick = true;
-					v3TerrainPick = v3CurPos;
-					break;
-				}
-				else
-					fMultiplier = fMAX(1.0f, 0.01f * ( v3CurPos.z - fMapHeight ) );
-			}
-		}
-		ft += fAdd * fMultiplier;
-	}
-	
-	if (bTerrainPick)
-	{
-		*v3IntersectPt = v3TerrainPick;
-		return true;
-	}
-	
-	return false;
-}
-*/
 
 void CMapOutdoor::GetHeightMap(const BYTE & c_rucTerrainNum, WORD ** pwHeightMap)
 {

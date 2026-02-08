@@ -17,26 +17,6 @@ std::string CInstanceBase::ms_astAffectEffectAttachBone[EFFECT_NUM];
 
 #define BYTE_COLOR_TO_D3DX_COLOR(r, g, b) D3DXCOLOR(float(r)/255.0f, float(g)/255.0f, float(b)/255.0f, 1.0f)
 
-/*
-D3DXCOLOR CInstanceBase::ms_kD3DXClrPC(0xFFFFD84D);//1.0f, 0.8470f, 0.3f, 1.0f
-D3DXCOLOR CInstanceBase::ms_kD3DXClrNPC(0xFF7BE85E);//0.4823f, 0.9098f, 0.3686f, 1.0f
-D3DXCOLOR CInstanceBase::ms_kD3DXClrMOB(0xFFEC170a);//0.9254f, 0.0901f, 0.0392f, 1.0f
-D3DXCOLOR CInstanceBase::ms_kD3DXClrPVP(0xFF8532D9);
-D3DXCOLOR CInstanceBase::ms_kD3DXClrPVPSelf(0xFFEE36DF);
-D3DXCOLOR CInstanceBase::ms_kD3DXClrKiller = BYTE_COLOR_TO_D3DX_COLOR(180, 100, 0);
-D3DXCOLOR CInstanceBase::ms_kD3DXClrTitle[CInstanceBase::TITLE_MAX_NUM] =
-{
-	BYTE_COLOR_TO_D3DX_COLOR(  0, 204, 255),
-	BYTE_COLOR_TO_D3DX_COLOR(  0, 144, 255),
-	BYTE_COLOR_TO_D3DX_COLOR( 92, 110, 255),
-	BYTE_COLOR_TO_D3DX_COLOR(155, 155, 255),
-	0xFFFFFFFF, // None
-	BYTE_COLOR_TO_D3DX_COLOR(207, 117,   0),
-	BYTE_COLOR_TO_D3DX_COLOR(235,  83,   0),
-	BYTE_COLOR_TO_D3DX_COLOR(227,   0,   0),
-	BYTE_COLOR_TO_D3DX_COLOR(255,   0,   0),
-};
-*/
 
 D3DXCOLOR g_akD3DXClrTitle[CInstanceBase::TITLE_NUM];
 D3DXCOLOR g_akD3DXClrName[CInstanceBase::NAMECOLOR_NUM];
@@ -86,14 +66,17 @@ const D3DXCOLOR& CInstanceBase::GetIndexedNameColor(UINT eNameColor)
 
 void CInstanceBase::AddDamageEffect(DWORD damage, BYTE flag, BOOL bSelf, BOOL bTarget)
 {
+	TraceError("AddDamageEffect: damage=%u flag=%u bSelf=%d bTarget=%d IsShowDamage=%d",
+		damage, flag, bSelf, bTarget, CPythonSystem::Instance().IsShowDamage());
 	if(CPythonSystem::Instance().IsShowDamage())
-	{		
+	{
 		SEffectDamage sDamage;
 		sDamage.bSelf = bSelf;
 		sDamage.bTarget = bTarget;
 		sDamage.damage = damage;
 		sDamage.flag = flag;
 		m_DamageQueue.push_back(sDamage);
+		TraceError("AddDamageEffect: Queued, queue size now=%d", m_DamageQueue.size());
 	}
 }
 
@@ -101,6 +84,8 @@ void CInstanceBase::ProcessDamage()
 {
 	if(m_DamageQueue.empty())
 		return;
+
+	TraceError("ProcessDamage: Queue not empty, processing...");
 
 	SEffectDamage sDamage = m_DamageQueue.front();
 
@@ -111,11 +96,13 @@ void CInstanceBase::ProcessDamage()
 	BOOL bSelf = sDamage.bSelf;
 	BOOL bTarget = sDamage.bTarget;
 
-	CCamera * pCamera = CCameraManager::Instance().GetCurrentCamera();	
+	TraceError("ProcessDamage: damage=%u flag=%u bSelf=%d bTarget=%d", damage, flag, bSelf, bTarget);
+
+	CCamera * pCamera = CCameraManager::Instance().GetCurrentCamera();
 	float cameraAngle = GetDegreeFromPosition2(pCamera->GetTarget().x,pCamera->GetTarget().y,pCamera->GetEye().x,pCamera->GetEye().y);
 
 	DWORD FONT_WIDTH = 30;
-	
+
 	CEffectManager& rkEftMgr=CEffectManager::Instance();
 
 	D3DXVECTOR3 v3Pos = m_GraphicThingInstance.GetPosition();
@@ -125,6 +112,7 @@ void CInstanceBase::ProcessDamage()
 
 	if ( (flag & DAMAGE_DODGE) || (flag & DAMAGE_BLOCK) )
 	{
+		TraceError("ProcessDamage: DODGE or BLOCK");
 		if(bSelf)
 			rkEftMgr.CreateEffect(ms_adwCRCAffectEffect[EFFECT_DAMAGE_MISS],v3Pos,v3Rot);
 		else
@@ -134,6 +122,7 @@ void CInstanceBase::ProcessDamage()
 	}
 	else if (flag & DAMAGE_CRITICAL)
 	{
+		TraceError("ProcessDamage: CRITICAL");
 		//rkEftMgr.CreateEffect(ms_adwCRCAffectEffect[EFFECT_DAMAGE_CRITICAL],v3Pos,v3Rot);
 		//return; 숫자도 표시.
 	}
@@ -151,6 +140,7 @@ void CInstanceBase::ProcessDamage()
 	{
 		if (bSelf)
 		{
+			TraceError("ProcessDamage: bSelf path - damage_");
 			strDamageType = "damage_";
 
 			if (m_bDamageEffectType == 0)
@@ -162,6 +152,8 @@ void CInstanceBase::ProcessDamage()
 		}
 		else if (!bTarget || ((IsAffect(AFFECT_INVISIBILITY) || IsAffect(AFFECT_EUNHYEONG)) && bTarget))
 		{
+			TraceError("ProcessDamage: non-target path (early return) bTarget=%d INVIS=%d EUNHYEONG=%d",
+				bTarget, IsAffect(AFFECT_INVISIBILITY), IsAffect(AFFECT_EUNHYEONG));
 			strDamageType = "nontarget_";
 			rdwCRCEft = EFFECT_DAMAGE_NOT_TARGET;
 
@@ -169,11 +161,15 @@ void CInstanceBase::ProcessDamage()
 		}
 		else
 		{
+			TraceError("ProcessDamage: target path - target_");
 			strDamageType = "target_";
 			rdwCRCEft = EFFECT_DAMAGE_TARGET;
 		}
 	}
 	
+	TraceError("ProcessDamage: Creating effect strDamageType=%s rdwCRCEft=%u effectCRC=%u",
+		strDamageType.c_str(), rdwCRCEft, ms_adwCRCAffectEffect[rdwCRCEft]);
+
 	DWORD index = 0;
 	DWORD num = 0;
 	std::vector<std::string> textures;
@@ -192,9 +188,11 @@ void CInstanceBase::ProcessDamage()
 		char numBuf[MAX_PATH];
 		sprintf(numBuf, "%d.dds", num);
 		textures.push_back("d:/ymir work/effect/affect/damagevalue/"  +strDamageType + numBuf);
-		
+
+		TraceError("ProcessDamage: texture path=%s", textures.back().c_str());
+
 		rkEftMgr.SetEffectTextures(ms_adwCRCAffectEffect[rdwCRCEft],textures);
-		
+
 		D3DXMATRIX matrix, matTrans;
 		D3DXMatrixIdentity(&matrix);
 
@@ -210,9 +208,10 @@ void CInstanceBase::ProcessDamage()
 		matrix = matTrans*matrix;
 
 		D3DXMatrixMultiply(&matrix, &pCamera->GetViewMatrix(), &matrix);
-		
-		rkEftMgr.CreateEffect(ms_adwCRCAffectEffect[rdwCRCEft], D3DXVECTOR3(matrix._41, matrix._42, matrix._43)
-			,v3Rot);	
+
+		DWORD effectResult = rkEftMgr.CreateEffect(ms_adwCRCAffectEffect[rdwCRCEft], D3DXVECTOR3(matrix._41, matrix._42, matrix._43)
+			,v3Rot);
+		TraceError("ProcessDamage: CreateEffect returned %u", effectResult);	
 		
 		textures.clear();
 
@@ -887,35 +886,6 @@ void CInstanceBase::__SetAffect(UINT eAffect, bool isVisible)
 			if (IsAffect(AFFECT_INVISIBILITY))
 				return;
 			break;
-/*
-		case AFFECT_GWIGEOM: // 전기 속성 공격으로 바뀔 예정
-			if (isVisible)
-			{
-				m_GraphicThingInstance.SetBattleHitEffect(ms_adwCRCAffectEffect[EFFECT_ELECTRIC_HIT]);
-				m_GraphicThingInstance.SetBattleAttachEffect(ms_adwCRCAffectEffect[EFFECT_ELECTRIC_ATTACH]);
-			}
-			else
-			{
-				m_GraphicThingInstance.SetBattleHitEffect(ms_adwCRCAffectEffect[EFFECT_HIT]);
-				m_GraphicThingInstance.SetBattleAttachEffect(0);
-			}
-			return;
-			break;
-		case AFFECT_HWAYEOM: // 화염 속성 공격으로 바뀔 예정
-			if (isVisible)
-			{
-				m_GraphicThingInstance.SetBattleHitEffect(ms_adwCRCAffectEffect[EFFECT_FLAME_HIT]);
-				m_GraphicThingInstance.SetBattleAttachEffect(ms_adwCRCAffectEffect[EFFECT_FLAME_ATTACH]);
-			}
-			else
-			{
-				m_GraphicThingInstance.SetBattleHitEffect(ms_adwCRCAffectEffect[EFFECT_HIT]);
-				m_GraphicThingInstance.SetBattleAttachEffect(0);
-			}
-			// 화염참은 공격할 때만 일시적으로 Visible 합니다.
-			return;
-			break;
-*/
 		case AFFECT_CHEONGEUN:
 			m_GraphicThingInstance.SetResistFallen(isVisible);
 			break;

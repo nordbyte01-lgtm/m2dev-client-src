@@ -294,36 +294,6 @@ void CActorInstance::ChangeMaterial(const char * c_szFileName)
 
  	SetMaterialImagePointer(c_rkSkinItem.m_ePart, c_rkSkinItem.m_stSrcFileName.c_str(), static_cast<CGraphicImage*>(pkRes));
 }
-/*
-void CActorInstance::SetPart(DWORD dwPartIndex, DWORD dwItemID)
-{
-	if (dwPartIndex>=CRaceData::PART_MAX_NUM)
-		return;
-
-	if (!m_pkCurRaceData)
-	{
-		assert(m_pkCurRaceData);
-		return;
-	}
-
-	CItemData * pItemData;
-	if (!CItemManager::Instance().GetItemDataPointer(dwItemID, &pItemData))
-		return;
-
-	RegisterModelThing(dwPartIndex, pItemData->GetModelThing());
-	for (DWORD i = 0; i < pItemData->GetLODModelThingCount(); ++i)
-	{
-		CGraphicThing * pThing;
-		if (!pItemData->GetLODModelThingPointer(i, &pThing))
-			continue;
-
-		RegisterLODThing(dwPartIndex, pThing);
-	}
-	SetModelInstance(dwPartIndex, dwPartIndex, 0);
-
-	m_adwPartItemID[dwPartIndex] = dwItemID;
-}
-*/
 
 DWORD CActorInstance::GetPartItemID(DWORD dwPartIndex)
 {

@@ -44,13 +44,13 @@ class CAccountConnector : public CNetworkStream, public CSingleton<CAccountConne
 
 		bool __AuthState_RecvEmpty();
 		bool __AuthState_RecvPhase();
-		bool __AuthState_RecvHandshake();
-		bool __AuthState_RecvPing();
-		bool __AuthState_SendPong();
 		bool __AuthState_RecvAuthSuccess();
 		bool __AuthState_RecvAuthFailure();
-		bool __AuthState_RecvKeyChallenge();
-		bool __AuthState_RecvKeyComplete();
+
+		// Thin wrappers for __AnalyzePacket dispatch (delegates to CNetworkStream base)
+		bool __AuthState_RecvPingBase()          { return RecvPingPacket(); }
+		bool __AuthState_RecvKeyChallengeBase()  { return RecvKeyChallenge(); }
+		bool __AuthState_RecvKeyCompleteBase()   { return RecvKeyComplete(); }
 
 		bool __AnalyzePacket(UINT uHeader, UINT uPacketSize, bool (CAccountConnector::*pfnDispatchPacket)());
 

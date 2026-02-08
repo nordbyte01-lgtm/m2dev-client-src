@@ -86,12 +86,13 @@ class CGuildMarkUploader : public CNetworkStream, public CSingleton<CGuildMarkUp
 		void __LoginState_Set();
 		bool __LoginState_Process();
 		bool __LoginState_RecvPhase();
-		bool __LoginState_RecvHandshake();
-		bool __LoginState_RecvPing();
-		bool __LoginState_RecvKeyChallenge();
-		bool __LoginState_RecvKeyComplete();
+		bool __LoginState_RecvKeyCompleteAndLogin();
 
 		bool __AnalyzePacket(UINT uHeader, UINT uPacketSize, bool (CGuildMarkUploader::*pfnDispatchPacket)());
+
+		// Thin wrappers for __AnalyzePacket dispatch (delegates to CNetworkStream base)
+		bool __LoginState_RecvPingBase()          { return RecvPingPacket(); }
+		bool __LoginState_RecvKeyChallengeBase()  { return RecvKeyChallenge(); }
 
 		bool __SendMarkPacket();
 		bool __SendSymbolPacket();
@@ -106,9 +107,8 @@ class CGuildMarkUploader : public CNetworkStream, public CSingleton<CGuildMarkUp
 
 		SGuildMark m_kMark;
 
-		DWORD m_dwSymbolBufSize;
 		DWORD m_dwSymbolCRC32;
-		uint8_t * m_pbySymbolBuf;
+		std::vector<uint8_t> m_symbolBuf;
 };
 
 #endif

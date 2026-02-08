@@ -1,5 +1,4 @@
 #include "StdAfx.h"
-#include "EterLib/NetPacketHeaderMap.h"
 
 #include "PythonNetworkStream.h"
 #include "Packet.h"
@@ -14,172 +13,6 @@
 // MARK_BUG_FIX
 static DWORD gs_nextDownloadMarkTime = 0;
 // END_OF_MARK_BUG_FIX
-
-// Packet ---------------------------------------------------------------------------
-class CMainPacketHeaderMap : public CNetworkPacketHeaderMap
-{
-	public:
-		enum
-		{
-			STATIC_SIZE_PACKET = false,
-			DYNAMIC_SIZE_PACKET = true,
-		};
-
-	public:
-		CMainPacketHeaderMap()
-		{
-			Set(HEADER_GC_EMPIRE,				CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCEmpire), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_WARP,					CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCWarp), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_SKILL_COOLTIME_END,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCSkillCoolTimeEnd), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_QUEST_INFO,			CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCQuestInfo), DYNAMIC_SIZE_PACKET));
-			Set(HEADER_GC_REQUEST_MAKE_GUILD,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCBlank), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_PVP,					CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPVP), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_DUEL_START,			CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCDuelStart), DYNAMIC_SIZE_PACKET));
-			Set(HEADER_GC_CHARACTER_ADD,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCCharacterAdd), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_CHAR_ADDITIONAL_INFO,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCCharacterAdditionalInfo), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_CHARACTER_ADD2,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCCharacterAdd2), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_CHARACTER_UPDATE,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCCharacterUpdate), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_CHARACTER_UPDATE2,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCCharacterUpdate2), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_CHARACTER_DEL,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCCharacterDelete), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_CHARACTER_MOVE,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCMove), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_CHAT,					CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCChat), DYNAMIC_SIZE_PACKET));
-
-			Set(HEADER_GC_SYNC_POSITION,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCC2C), DYNAMIC_SIZE_PACKET));
-
-			Set(HEADER_GC_LOGIN_SUCCESS3,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCLoginSuccess3), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_LOGIN_SUCCESS4,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCLoginSuccess4), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_LOGIN_FAILURE,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCLoginFailure), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_PLAYER_CREATE_SUCCESS,		 CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPlayerCreateSuccess), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_PLAYER_CREATE_FAILURE,		 CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCCreateFailure), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_PLAYER_DELETE_SUCCESS,		 CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCBlank), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_PLAYER_DELETE_WRONG_SOCIAL_ID, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCBlank), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_STUN,					CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCStun), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_DEAD,					CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCDead), STATIC_SIZE_PACKET));
-			
-			Set(HEADER_GC_MAIN_CHARACTER,			CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCMainCharacter), STATIC_SIZE_PACKET));
-
-			// SUPPORT_BGM
-			Set(HEADER_GC_MAIN_CHARACTER2_EMPIRE,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCMainCharacter2_EMPIRE), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_MAIN_CHARACTER3_BGM,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCMainCharacter3_BGM), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_MAIN_CHARACTER4_BGM_VOL,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCMainCharacter4_BGM_VOL), STATIC_SIZE_PACKET));
-			// END_OFSUPPORT_BGM
-
-			Set(HEADER_GC_PLAYER_POINTS,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPoints), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_PLAYER_POINT_CHANGE,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPointChange), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_ITEM_DEL,				CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCItemDel), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_ITEM_SET,				CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCItemSet), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_ITEM_GET,				CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCItemGet), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_ITEM_USE,				CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCItemUse), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_ITEM_UPDATE,			CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCItemUpdate), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_ITEM_GROUND_ADD,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCItemGroundAdd), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_ITEM_GROUND_DEL,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCItemGroundDel), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_ITEM_OWNERSHIP,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCItemOwnership), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_QUICKSLOT_ADD,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCQuickSlotAdd), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_QUICKSLOT_DEL,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCQuickSlotDel), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_QUICKSLOT_SWAP,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCQuickSlotSwap), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_WHISPER,				CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCWhisper), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_CHARACTER_POSITION,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPosition), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_MOTION,				CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCMotion), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_SHOP,			CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCShop), DYNAMIC_SIZE_PACKET));
-			Set(HEADER_GC_SHOP_SIGN,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCShopSign), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_EXCHANGE,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCExchange), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_PING,			CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPing), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_SCRIPT,			CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCScript), DYNAMIC_SIZE_PACKET));
-			Set(HEADER_GC_QUEST_CONFIRM,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCQuestConfirm), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_TARGET,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCTarget), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_MOUNT,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCMount), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_CHANGE_SPEED,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCChangeSpeed), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_HANDSHAKE,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCHandshake), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_HANDSHAKE_OK,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCBlank), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_BINDUDP,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCBindUDP), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_OWNERSHIP,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCOwnership), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_CREATE_FLY,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCCreateFly), STATIC_SIZE_PACKET));
-			// Secure key exchange (libsodium)
-			Set(HEADER_GC_KEY_CHALLENGE, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCKeyChallenge), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_KEY_COMPLETE, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCKeyComplete), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_ADD_FLY_TARGETING, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCFlyTargeting), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_FLY_TARGETING, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCFlyTargeting), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_PHASE,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPhase), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_SKILL_LEVEL,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCSkillLevel), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_SKILL_LEVEL_NEW,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCSkillLevelNew), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_MESSENGER,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCMessenger), DYNAMIC_SIZE_PACKET));
-			Set(HEADER_GC_GUILD,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCGuild), DYNAMIC_SIZE_PACKET));
-			Set(HEADER_GC_MARK_UPDATE,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCMarkUpdate), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_PARTY_INVITE,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPartyInvite), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_PARTY_ADD,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPartyAdd), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_PARTY_UPDATE,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPartyUpdate), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_PARTY_REMOVE,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPartyRemove), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_PARTY_LINK,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPartyLink), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_PARTY_UNLINK,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPartyUnlink), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_PARTY_PARAMETER,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCPartyParameter), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_SAFEBOX_SET,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCItemSet), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_SAFEBOX_DEL,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCItemDel), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_SAFEBOX_WRONG_PASSWORD,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCSafeboxWrongPassword), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_SAFEBOX_SIZE,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCSafeboxSize), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_SAFEBOX_MONEY_CHANGE,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCSafeboxMoneyChange), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_FISHING,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCFishing), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_DUNGEON, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCDungeon), DYNAMIC_SIZE_PACKET));
-			//Set(HEADER_GC_SLOW_TIMER, CNetworkPacketHeaderMap::TPacketType(sizeof(BYTE), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_TIME, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCTime), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_WALK_MODE, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCWalkMode), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_CHANGE_SKILL_GROUP, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCChangeSkillGroup), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_REFINE_INFORMATION, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCRefineInformation), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_REFINE_INFORMATION_NEW, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCRefineInformationNew), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_SEPCIAL_EFFECT, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCSpecialEffect), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_NPC_POSITION, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCNPCPosition), DYNAMIC_SIZE_PACKET));
-			Set(HEADER_GC_CHANGE_NAME, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCChangeName), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_LOGIN_KEY, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCLoginKey), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_AUTH_SUCCESS, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCAuthSuccess), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_CHANNEL, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCChannel), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_VIEW_EQUIP, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCViewEquip), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_LAND_LIST, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCLandList), DYNAMIC_SIZE_PACKET));
-
-			//Set(HEADER_GC_TARGET_CREATE, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCTargetCreate), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_TARGET_UPDATE, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCTargetUpdate), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_TARGET_DELETE, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCTargetDelete), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_TARGET_CREATE_NEW, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCTargetCreateNew), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_AFFECT_ADD, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCAffectAdd), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_AFFECT_REMOVE, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCAffectRemove), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_MALL_OPEN, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCMallOpen), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_MALL_SET, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCItemSet), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_MALL_DEL, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCItemDel), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_LOVER_INFO, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCLoverInfo), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_LOVE_POINT_UPDATE, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCLovePointUpdate), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_DIG_MOTION, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCDigMotion), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_DAMAGE_INFO, CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCDamageInfo), STATIC_SIZE_PACKET));
-
-			Set(HEADER_GC_SPECIFIC_EFFECT,	CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCSpecificEffect), STATIC_SIZE_PACKET));
-			Set(HEADER_GC_DRAGON_SOUL_REFINE,		CNetworkPacketHeaderMap::TPacketType(sizeof(TPacketGCDragonSoulRefine), STATIC_SIZE_PACKET));
-			
-		}
-};
-
-static std::vector <uint8_t> gs_vecLastHeaders;
 
 void CPythonNetworkStream::ExitApplication()
 {
@@ -486,107 +319,70 @@ void CPythonNetworkStream::SetLoginKey(DWORD dwLoginKey)
 	m_dwLoginKey = dwLoginKey;
 }
 
-bool CPythonNetworkStream::CheckPacket(TPacketHeader * pRetHeader)
+// Table-driven packet dispatch — replaces CheckPacket() + per-phase switch statements.
+// Returns true if a packet was processed and more may follow.
+// Returns false to exit the phase loop (no data, error, or exitPhase handler).
+bool CPythonNetworkStream::DispatchPacket(const PacketHandlerMap& handlers)
 {
-	*pRetHeader = 0;
-
-	static CMainPacketHeaderMap s_packetHeaderMap;
-
 	TPacketHeader header;
-
 	if (!Peek(sizeof(TPacketHeader), &header))
 		return false;
 
-	if (0 == header)
+	// Skip zero-padding (can occur from encryption alignment)
+	while (0 == header)
 	{
 		if (!Recv(sizeof(TPacketHeader), &header))
 			return false;
-		
-		while (Peek(sizeof(TPacketHeader), &header))
-		{
-			if (0 == header)
-			{
-				if (!Recv(sizeof(TPacketHeader), &header))
-					return false;
-			}
-			else
-			{
-				break;
-			}
-		}
-
-		if (0 == header)
+		if (!Peek(sizeof(TPacketHeader), &header))
 			return false;
 	}
 
-	CNetworkPacketHeaderMap::TPacketType PacketType;
-
-	if (!s_packetHeaderMap.Get(header, &PacketType))
+	// Look up handler in this phase's table
+	auto it = handlers.find(header);
+	if (it == handlers.end())
 	{
-		TraceError("Unknown packet header: %u(0x%X), Phase: %s, Last packets:", header, header, m_strPhase.c_str());
-		for (const auto& it : gs_vecLastHeaders)
-			TraceError("%u(0x%X)", it, it);
-
+		TraceError("Unknown packet header: 0x%04X (recv_seq #%u), Phase: %s", header, m_dwRecvPacketSeq, m_strPhase.c_str());
+		DumpRecentPackets();
 		ClearRecvBuffer();
+		return false;
+	}
 
+	// All packets use uniform framing: [header:2][length:2][payload...]
+	TDynamicSizePacketHeader packetFrame;
+	if (!Peek(sizeof(TDynamicSizePacketHeader), &packetFrame))
+		return false;
+
+	constexpr uint16_t MAX_PACKET_LENGTH = 65000;
+	if (packetFrame.length < PACKET_HEADER_SIZE || packetFrame.length > MAX_PACKET_LENGTH)
+	{
+		TraceError("DispatchPacket: Invalid packet length: header 0x%04X length: %u (min %u, max %u), recv_seq #%u",
+			header, packetFrame.length, PACKET_HEADER_SIZE, MAX_PACKET_LENGTH, m_dwRecvPacketSeq);
+		DumpRecentPackets();
+		ClearRecvBuffer();
 		PostQuitMessage(0);
 		return false;
 	}
 
-	// Code for dynamic size packet
-	if (PacketType.isDynamicSizePacket)
-	{
-		TDynamicSizePacketHeader DynamicSizePacketHeader;
-
-		if (!Peek(sizeof(TDynamicSizePacketHeader), &DynamicSizePacketHeader))
-			return false;
-
-		if (!Peek(DynamicSizePacketHeader.size))
-		{
-			TraceError("CPythonNetworkStream::CheckPacket - Not enough dynamic packet size: header %d packet size: %d",
-				DynamicSizePacketHeader.header,
-				DynamicSizePacketHeader.size);
-			return false;
-		}
-	}
-	else
-	{
-		if (!Peek(PacketType.iPacketSize))
-		{
-			TraceError("Not enough packet size: header %d packet size: %d, recv buffer size: %d last packets:",
-				header,
-				PacketType.iPacketSize,
-				GetRecvBufferSize()
-			);
-
-			for (const auto& it : gs_vecLastHeaders)
-				TraceError("%u(0x%X)", it, it);
-
-			return false;
-		}
-	}
-
-	if (!header)
+	// Wait for full packet to be received
+	if (!Peek(packetFrame.length))
 		return false;
 
-	*pRetHeader = header;	
+	// Log this packet
+	LogRecvPacket(header, packetFrame.length);
 
-	// Add to last headers, if last header is contain more than 10 headers, remove first header
-	if (gs_vecLastHeaders.size() > 10)
-		gs_vecLastHeaders.erase(gs_vecLastHeaders.begin());
+	// Call handler
+	bool ret = (this->*(it->second.handler))();
 
-	gs_vecLastHeaders.push_back(header);
+	if (!ret || it->second.exitPhase)
+		return false;
 
-	//Tracenf("header %d size %d", header, PacketType.iPacketSize);
-	//Tracenf("header %d size %d outputpos[%d] security %u", header, PacketType.iPacketSize, m_recvBufOutputPos, IsSecurityMode());
 	return true;
 }
 
 bool CPythonNetworkStream::RecvErrorPacket(int header)
 {
-	TraceError("Phase %s does not handle this header (header: %u(0x%X)) Last packets: ", m_strPhase.c_str(), header, header);
-	for (const auto& it : gs_vecLastHeaders)
-		TraceError("%u(0x%X)", it, it);
+	TraceError("Phase %s does not handle header 0x%04X (recv_seq #%u)", m_strPhase.c_str(), header, m_dwRecvPacketSeq - 1);
+	DumpRecentPackets();
 
 	ClearRecvBuffer();
 	return true;
@@ -601,43 +397,41 @@ bool CPythonNetworkStream::RecvPhasePacket()
 
 	switch (packet_phase.phase)
 	{
-		case PHASE_CLOSE:				// 끊기는 상태 (또는 끊기 전 상태)
+		case PHASE_CLOSE:
 			ClosePhase();
 			break;
 
-		case PHASE_HANDSHAKE:			// 악수..;;
+		case PHASE_HANDSHAKE:
 			SetHandShakePhase();
 			break;
 
-		case PHASE_LOGIN:				// 로그인 중
+		case PHASE_LOGIN:
 			SetLoginPhase();
 			break;
 
-		case PHASE_SELECT:				// 캐릭터 선택 화면
+		case PHASE_SELECT:
 			SetSelectPhase();
 #if defined(ENABLE_DISCORD_RPC)
 			Discord_Update(false);
 #endif
-
 			BuildProcessCRC();
-	
 			// MARK_BUG_FIX
 			__DownloadMark();
 			// END_OF_MARK_BUG_FIX
 			break;
 
-		case PHASE_LOADING:				// 선택 후 로딩 화면
+		case PHASE_LOADING:
 			SetLoadingPhase();
 			break;
 
-		case PHASE_GAME:				// 게임 화면
+		case PHASE_GAME:
 			SetGamePhase();
 #if defined(ENABLE_DISCORD_RPC)
 			Discord_Update(true);
 #endif
 			break;
 
-		case PHASE_DEAD:				// 죽었을 때.. (게임 안에 있는 것일 수도..)
+		case PHASE_DEAD:
 			break;
 	}
 
@@ -646,8 +440,6 @@ bool CPythonNetworkStream::RecvPhasePacket()
 
 bool CPythonNetworkStream::RecvPingPacket()
 {
-	Tracef("recv ping packet. (securitymode %u)\n", IsSecurityMode());
-
 	TPacketGCPing kPacketPing;
 
 	if (!Recv(sizeof(TPacketGCPing), &kPacketPing))
@@ -655,23 +447,16 @@ bool CPythonNetworkStream::RecvPingPacket()
 
 	m_dwLastGamePingTime = ELTimer_GetMSec();
 
+	// Sync server time from ping
+	ELTimer_SetServerMSec(kPacketPing.server_time);
+
 	TPacketCGPong kPacketPong;
-	kPacketPong.bHeader = HEADER_CG_PONG;
-	kPacketPong.bSequence = GetNextSequence();
+	kPacketPong.header = CG::PONG;
+	kPacketPong.length = sizeof(kPacketPong);
 
 	if (!Send(sizeof(TPacketCGPong), &kPacketPong))
 		return false;
 
-	return true;
-}
-
-bool CPythonNetworkStream::RecvDefaultPacket(int header)
-{
-	if (!header)
-		return true;
-
-	TraceError("처리되지 않은 패킷 헤더 %d, state %s\n", header, m_strPhase.c_str());
-	ClearRecvBuffer();
 	return true;
 }
 
@@ -680,21 +465,15 @@ bool CPythonNetworkStream::OnProcess()
 	if (m_isStartGame)
 	{
 		m_isStartGame = FALSE;
-
 		PyCallClassMemberFunc(m_poHandler, "SetGamePhase", Py_BuildValue("()"));
-//		PyCallClassMemberFunc(m_apoPhaseWnd[PHASE_WINDOW_GAME], "StartGame", Py_BuildValue("()"));
 	}
-	
+
 	m_rokNetActorMgr->Update();
 
 	if (m_phaseProcessFunc.IsEmpty())
 		return true;
 
-	//TPacketHeader header;
-	//while(CheckPacket(&header))
-	{
-		m_phaseProcessFunc.Run();
-	}
+	m_phaseProcessFunc.Run();
 
 	return true;
 }
@@ -706,6 +485,7 @@ void CPythonNetworkStream::SetOffLinePhase()
 	if ("OffLine" != m_strPhase)
 		m_phaseLeaveFunc.Run();
 
+	Tracef("[PHASE] Entering phase: OffLine\n");
 	m_strPhase = "OffLine";
 
 	Tracen("");
@@ -908,10 +688,272 @@ CPythonNetworkStream::CPythonNetworkStream()
 	std::fill(m_apoPhaseWnd, m_apoPhaseWnd+PHASE_WINDOW_NUM, (PyObject*)NULL);
 	m_poSerCommandParserWnd = NULL;
 
+	// Register packet handlers for all phases
+	// Note: GameHandlers must be registered before LoadingHandlers (loading copies game handlers as fallback)
+	RegisterOfflineHandlers();
+	RegisterHandshakeHandlers();
+	RegisterLoginHandlers();
+	RegisterSelectHandlers();
+	RegisterGameHandlers();
+	RegisterLoadingHandlers();
+
 	SetOffLinePhase();
 }
 
 CPythonNetworkStream::~CPythonNetworkStream()
 {
 	Tracen("PythonNetworkMainStream Clear");
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Packet handler registration tables
+// Each phase registers {header → handler, minSize, exitPhase}
+// ---------------------------------------------------------------------------
+
+void CPythonNetworkStream::RegisterOfflineHandlers()
+{
+	auto& h = m_offlineHandlers;
+	h[GC::PHASE]         = { &CPythonNetworkStream::RecvPhasePacket,   sizeof(TPacketGCPhase),          true };
+}
+
+void CPythonNetworkStream::RegisterHandshakeHandlers()
+{
+	auto& h = m_handshakeHandlers;
+	h[GC::PHASE]         = { &CPythonNetworkStream::RecvPhasePacket,   sizeof(TPacketGCPhase),          true };
+	h[GC::PING]          = { &CPythonNetworkStream::RecvPingPacket,    sizeof(TPacketGCPing),           true };
+	h[GC::KEY_CHALLENGE] = { &CPythonNetworkStream::RecvKeyChallenge,  sizeof(TPacketGCKeyChallenge),   true };
+	h[GC::KEY_COMPLETE]  = { &CPythonNetworkStream::RecvKeyComplete,   sizeof(TPacketGCKeyComplete),    true };
+}
+
+void CPythonNetworkStream::RegisterLoginHandlers()
+{
+	auto& h = m_loginHandlers;
+	h[GC::PHASE]           = { &CPythonNetworkStream::RecvPhasePacket,            sizeof(TPacketGCPhase),           true };
+	h[GC::LOGIN_SUCCESS3]  = { &CPythonNetworkStream::__RecvLoginSuccessPacket3,  sizeof(TPacketGCLoginSuccess3),   false };
+	h[GC::LOGIN_SUCCESS4]  = { &CPythonNetworkStream::__RecvLoginSuccessPacket4,  sizeof(TPacketGCLoginSuccess4),   false };
+	h[GC::LOGIN_FAILURE]   = { &CPythonNetworkStream::__RecvLoginFailurePacket,   sizeof(TPacketGCLoginFailure),    false };
+	h[GC::EMPIRE]          = { &CPythonNetworkStream::__RecvEmpirePacket,         sizeof(TPacketGCEmpire),          false };
+	h[GC::LOGIN_KEY]       = { &CPythonNetworkStream::__RecvLoginKeyPacket,       sizeof(TPacketGCLoginKey),        false };
+	h[GC::PING]            = { &CPythonNetworkStream::RecvPingPacket,             sizeof(TPacketGCPing),            false };
+	h[GC::KEY_CHALLENGE]   = { &CPythonNetworkStream::RecvKeyChallenge,           sizeof(TPacketGCKeyChallenge),    true };
+	h[GC::KEY_COMPLETE]    = { &CPythonNetworkStream::RecvKeyComplete,            sizeof(TPacketGCKeyComplete),     true };
+}
+
+void CPythonNetworkStream::RegisterSelectHandlers()
+{
+	auto& h = m_selectHandlers;
+	h[GC::PHASE]                       = { &CPythonNetworkStream::RecvPhasePacket,                  sizeof(TPacketGCPhase),                      true };
+	h[GC::EMPIRE]                      = { &CPythonNetworkStream::__RecvEmpirePacket,               sizeof(TPacketGCEmpire),                     false };
+	h[GC::LOGIN_SUCCESS3]              = { &CPythonNetworkStream::__RecvLoginSuccessPacket3,        sizeof(TPacketGCLoginSuccess3),               false };
+	h[GC::LOGIN_SUCCESS4]              = { &CPythonNetworkStream::__RecvLoginSuccessPacket4,        sizeof(TPacketGCLoginSuccess4),               false };
+	h[GC::PLAYER_CREATE_SUCCESS]       = { &CPythonNetworkStream::__RecvPlayerCreateSuccessPacket,  sizeof(TPacketGCPlayerCreateSuccess),         false };
+	h[GC::PLAYER_CREATE_FAILURE]       = { &CPythonNetworkStream::__RecvPlayerCreateFailurePacket,  sizeof(TPacketGCCreateFailure),               false };
+	h[GC::PLAYER_DELETE_WRONG_SOCIAL_ID] = { &CPythonNetworkStream::__RecvPlayerDestroyFailurePacket, sizeof(TPacketGCBlank),                    false };
+	h[GC::PLAYER_DELETE_SUCCESS]       = { &CPythonNetworkStream::__RecvPlayerDestroySuccessPacket, sizeof(TPacketGCDestroyCharacterSuccess),     false };
+	h[GC::CHANGE_NAME]                 = { &CPythonNetworkStream::__RecvChangeName,                 sizeof(TPacketGCChangeName),                 false };
+	h[GC::PLAYER_POINT_CHANGE]         = { &CPythonNetworkStream::RecvPointChange,                  sizeof(TPacketGCPointChange),                false };
+	h[GC::PING]                        = { &CPythonNetworkStream::RecvPingPacket,                   sizeof(TPacketGCPing),                       false };
+	h[GC::KEY_CHALLENGE]               = { &CPythonNetworkStream::RecvKeyChallenge,                 sizeof(TPacketGCKeyChallenge),               true };
+	h[GC::KEY_COMPLETE]                = { &CPythonNetworkStream::RecvKeyComplete,                  sizeof(TPacketGCKeyComplete),                true };
+}
+
+void CPythonNetworkStream::RegisterGameHandlers()
+{
+	auto& h = m_gameHandlers;
+
+	// Phase / control
+	h[GC::PHASE]                  = { &CPythonNetworkStream::RecvPhasePacket,              sizeof(TPacketGCPhase),                      true };
+	h[GC::KEY_CHALLENGE]          = { &CPythonNetworkStream::RecvKeyChallenge,             sizeof(TPacketGCKeyChallenge),               true };
+	h[GC::KEY_COMPLETE]           = { &CPythonNetworkStream::RecvKeyComplete,              sizeof(TPacketGCKeyComplete),                true };
+	h[GC::PING]                   = { &CPythonNetworkStream::RecvPingPacket,               sizeof(TPacketGCPing),                       false };
+
+	// Observer
+	h[GC::OBSERVER_ADD]           = { &CPythonNetworkStream::RecvObserverAddPacket,        sizeof(TPacketGCObserverAdd),                false };
+	h[GC::OBSERVER_REMOVE]        = { &CPythonNetworkStream::RecvObserverRemovePacket,     sizeof(TPacketGCObserverRemove),             false };
+	h[GC::OBSERVER_MOVE]          = { &CPythonNetworkStream::RecvObserverMovePacket,       sizeof(TPacketGCObserverMove),               false };
+
+	// Warp / PVP
+	h[GC::WARP]                   = { &CPythonNetworkStream::RecvWarpPacket,               sizeof(TPacketGCWarp),                       false };
+	h[GC::PVP]                    = { &CPythonNetworkStream::RecvPVPPacket,                sizeof(TPacketGCPVP),                        false };
+	h[GC::DUEL_START]             = { &CPythonNetworkStream::RecvDuelStartPacket,          sizeof(TPacketGCDuelStart),                  false };
+
+	// Character
+	h[GC::CHARACTER_ADD]          = { &CPythonNetworkStream::RecvCharacterAppendPacket,    sizeof(TPacketGCCharacterAdd),               false };
+	h[GC::CHAR_ADDITIONAL_INFO]   = { &CPythonNetworkStream::RecvCharacterAdditionalInfo,  sizeof(TPacketGCCharacterAdditionalInfo),    false };
+	h[GC::CHARACTER_ADD2]         = { &CPythonNetworkStream::RecvCharacterAppendPacketNew, sizeof(TPacketGCCharacterAdd2),              false };
+	h[GC::CHARACTER_UPDATE]       = { &CPythonNetworkStream::RecvCharacterUpdatePacket,    sizeof(TPacketGCCharacterUpdate),            false };
+	h[GC::CHARACTER_UPDATE2]      = { &CPythonNetworkStream::RecvCharacterUpdatePacketNew, sizeof(TPacketGCCharacterUpdate2),           false };
+	h[GC::CHARACTER_DEL]          = { &CPythonNetworkStream::RecvCharacterDeletePacket,    sizeof(TPacketGCCharacterDelete),            false };
+	h[GC::CHAT]                   = { &CPythonNetworkStream::RecvChatPacket,               sizeof(TPacketGCChat),                       false };
+	h[GC::SYNC_POSITION]          = { &CPythonNetworkStream::RecvSyncPositionPacket,       sizeof(TPacketGCC2C),                        false };
+	h[GC::OWNERSHIP]              = { &CPythonNetworkStream::RecvOwnerShipPacket,          sizeof(TPacketGCOwnership),                  false };
+	h[GC::WHISPER]                = { &CPythonNetworkStream::RecvWhisperPacket,            sizeof(TPacketGCWhisper),                    false };
+	h[GC::MOVE]                   = { &CPythonNetworkStream::RecvCharacterMovePacket,      sizeof(TPacketGCMove),                       false };
+	h[GC::CHARACTER_POSITION]     = { &CPythonNetworkStream::RecvCharacterPositionPacket,  sizeof(TPacketGCPosition),                   false };
+
+	// Combat
+	h[GC::STUN]                   = { &CPythonNetworkStream::RecvStunPacket,               sizeof(TPacketGCStun),                       false };
+	h[GC::DEAD]                   = { &CPythonNetworkStream::RecvDeadPacket,               sizeof(TPacketGCDead),                       false };
+	h[GC::PLAYER_POINT_CHANGE]    = { &CPythonNetworkStream::RecvPointChange,              sizeof(TPacketGCPointChange),                false };
+	h[GC::DAMAGE_INFO]            = { &CPythonNetworkStream::RecvDamageInfoPacket,         sizeof(TPacketGCDamageInfo),                 false };
+
+	// Items
+	h[GC::ITEM_DEL]               = { &CPythonNetworkStream::RecvItemDelPacket,            sizeof(TPacketGCItemDel),                    false };
+	h[GC::ITEM_SET]               = { &CPythonNetworkStream::RecvItemSetPacket,            sizeof(TPacketGCItemSet),                    false };
+	h[GC::ITEM_GET]               = { &CPythonNetworkStream::RecvItemGetPacket,            sizeof(TPacketGCItemGet),                    false };
+	h[GC::ITEM_USE]               = { &CPythonNetworkStream::RecvItemUsePacket,            sizeof(TPacketGCItemUse),                    false };
+	h[GC::ITEM_UPDATE]            = { &CPythonNetworkStream::RecvItemUpdatePacket,         sizeof(TPacketGCItemUpdate),                 false };
+	h[GC::ITEM_GROUND_ADD]        = { &CPythonNetworkStream::RecvItemGroundAddPacket,      sizeof(TPacketGCItemGroundAdd),              false };
+	h[GC::ITEM_GROUND_DEL]        = { &CPythonNetworkStream::RecvItemGroundDelPacket,      sizeof(TPacketGCItemGroundDel),              false };
+	h[GC::ITEM_OWNERSHIP]         = { &CPythonNetworkStream::RecvItemOwnership,            sizeof(TPacketGCItemOwnership),              false };
+
+	// Quickslot
+	h[GC::QUICKSLOT_ADD]          = { &CPythonNetworkStream::RecvQuickSlotAddPacket,       sizeof(TPacketGCQuickSlotAdd),               false };
+	h[GC::QUICKSLOT_DEL]          = { &CPythonNetworkStream::RecvQuickSlotDelPacket,       sizeof(TPacketGCQuickSlotDel),               false };
+	h[GC::QUICKSLOT_SWAP]         = { &CPythonNetworkStream::RecvQuickSlotMovePacket,      sizeof(TPacketGCQuickSlotSwap),              false };
+
+	// Motion / Movement
+	h[GC::MOTION]                 = { &CPythonNetworkStream::RecvMotionPacket,             sizeof(TPacketGCMotion),                     false };
+	h[GC::CHANGE_SPEED]           = { &CPythonNetworkStream::RecvChangeSpeedPacket,        sizeof(TPacketGCChangeSpeed),                false };
+
+	// Shop / Exchange
+	h[GC::SHOP]                   = { &CPythonNetworkStream::RecvShopPacket,               sizeof(TPacketGCShop),                       false };
+	h[GC::SHOP_SIGN]              = { &CPythonNetworkStream::RecvShopSignPacket,           sizeof(TPacketGCShopSign),                   false };
+	h[GC::EXCHANGE]               = { &CPythonNetworkStream::RecvExchangePacket,           sizeof(TPacketGCExchange),                   false };
+
+	// Quest
+	h[GC::QUEST_INFO]             = { &CPythonNetworkStream::RecvQuestInfoPacket,          sizeof(TPacketGCQuestInfo),                  false };
+	h[GC::REQUEST_MAKE_GUILD]     = { &CPythonNetworkStream::RecvRequestMakeGuild,         sizeof(TPacketGCBlank),                      false };
+	h[GC::SCRIPT]                 = { &CPythonNetworkStream::RecvScriptPacket,             sizeof(TPacketGCScript),                     false };
+	h[GC::QUEST_CONFIRM]          = { &CPythonNetworkStream::RecvQuestConfirmPacket,       sizeof(TPacketGCQuestConfirm),               false };
+
+	// Target / Mount
+	h[GC::TARGET]                 = { &CPythonNetworkStream::RecvTargetPacket,             sizeof(TPacketGCTarget),                     false };
+	h[GC::MOUNT]                  = { &CPythonNetworkStream::RecvMountPacket,              sizeof(TPacketGCMount),                      false };
+
+	// Points
+	h[GC::PLAYER_POINTS]          = { &CPythonNetworkStream::__RecvPlayerPoints,           sizeof(TPacketGCPoints),                     false };
+
+	// Fly
+	h[GC::CREATE_FLY]             = { &CPythonNetworkStream::RecvCreateFlyPacket,          sizeof(TPacketGCCreateFly),                  false };
+	h[GC::FLY_TARGETING]          = { &CPythonNetworkStream::RecvFlyTargetingPacket,       sizeof(TPacketGCFlyTargeting),               false };
+	h[GC::ADD_FLY_TARGETING]      = { &CPythonNetworkStream::RecvAddFlyTargetingPacket,    sizeof(TPacketGCFlyTargeting),               false };
+
+	// Skills
+	h[GC::SKILL_LEVEL]            = { &CPythonNetworkStream::RecvSkillLevel,               sizeof(TPacketGCSkillLevel),                 false };
+	h[GC::SKILL_LEVEL_NEW]        = { &CPythonNetworkStream::RecvSkillLevelNew,            sizeof(TPacketGCSkillLevelNew),              false };
+	h[GC::SKILL_COOLTIME_END]     = { &CPythonNetworkStream::RecvSkillCoolTimeEnd,         sizeof(TPacketGCSkillCoolTimeEnd),           false };
+
+	// Messenger / Guild
+	h[GC::MESSENGER]              = { &CPythonNetworkStream::RecvMessenger,                sizeof(TPacketGCMessenger),                  false };
+	h[GC::GUILD]                  = { &CPythonNetworkStream::RecvGuild,                    sizeof(TPacketGCGuild),                      false };
+	h[GC::MARK_UPDATE]            = { &CPythonNetworkStream::RecvMarkUpdate,               sizeof(TPacketGCMarkUpdate),                 false };
+
+	// Party
+	h[GC::PARTY_INVITE]           = { &CPythonNetworkStream::RecvPartyInvite,              sizeof(TPacketGCPartyInvite),                false };
+	h[GC::PARTY_ADD]              = { &CPythonNetworkStream::RecvPartyAdd,                 sizeof(TPacketGCPartyAdd),                   false };
+	h[GC::PARTY_UPDATE]           = { &CPythonNetworkStream::RecvPartyUpdate,              sizeof(TPacketGCPartyUpdate),                false };
+	h[GC::PARTY_REMOVE]           = { &CPythonNetworkStream::RecvPartyRemove,              sizeof(TPacketGCPartyRemove),                false };
+	h[GC::PARTY_LINK]             = { &CPythonNetworkStream::RecvPartyLink,                sizeof(TPacketGCPartyLink),                  false };
+	h[GC::PARTY_UNLINK]           = { &CPythonNetworkStream::RecvPartyUnlink,              sizeof(TPacketGCPartyUnlink),                false };
+	h[GC::PARTY_PARAMETER]        = { &CPythonNetworkStream::RecvPartyParameter,           sizeof(TPacketGCPartyParameter),             false };
+
+	// Safebox
+	h[GC::SAFEBOX_SET]            = { &CPythonNetworkStream::RecvSafeBoxSetPacket,         sizeof(TPacketGCItemSet),                    false };
+	h[GC::SAFEBOX_DEL]            = { &CPythonNetworkStream::RecvSafeBoxDelPacket,         sizeof(TPacketGCItemDel),                    false };
+	h[GC::SAFEBOX_WRONG_PASSWORD] = { &CPythonNetworkStream::RecvSafeBoxWrongPasswordPacket, sizeof(TPacketGCSafeboxWrongPassword),     false };
+	h[GC::SAFEBOX_SIZE]           = { &CPythonNetworkStream::RecvSafeBoxSizePacket,        sizeof(TPacketGCSafeboxSize),                false };
+	h[GC::SAFEBOX_MONEY_CHANGE]   = { &CPythonNetworkStream::RecvSafeBoxMoneyChangePacket, sizeof(TPacketGCSafeboxMoneyChange),         false };
+
+	// Fishing / Dungeon / Time
+	h[GC::FISHING]                = { &CPythonNetworkStream::RecvFishing,                  sizeof(TPacketGCFishing),                    false };
+	h[GC::DUNGEON]                = { &CPythonNetworkStream::RecvDungeon,                  sizeof(TPacketGCDungeon),                    false };
+	h[GC::TIME]                   = { &CPythonNetworkStream::RecvTimePacket,               sizeof(TPacketGCTime),                       false };
+
+	// Walk / Skill group / Refine
+	h[GC::WALK_MODE]              = { &CPythonNetworkStream::RecvWalkModePacket,           sizeof(TPacketGCWalkMode),                   false };
+	h[GC::CHANGE_SKILL_GROUP]     = { &CPythonNetworkStream::RecvChangeSkillGroupPacket,   sizeof(TPacketGCChangeSkillGroup),           false };
+	h[GC::REFINE_INFORMATION]     = { &CPythonNetworkStream::RecvRefineInformationPacket,  sizeof(TPacketGCRefineInformation),          false };
+	h[GC::REFINE_INFORMATION_NEW] = { &CPythonNetworkStream::RecvRefineInformationPacketNew, sizeof(TPacketGCRefineInformationNew),     false };
+
+	// Effects
+	h[GC::SEPCIAL_EFFECT]         = { &CPythonNetworkStream::RecvSpecialEffect,            sizeof(TPacketGCSpecialEffect),              false };
+	h[GC::SPECIFIC_EFFECT]        = { &CPythonNetworkStream::RecvSpecificEffect,           sizeof(TPacketGCSpecificEffect),             false };
+
+	// Map / NPC
+	h[GC::NPC_POSITION]           = { &CPythonNetworkStream::RecvNPCList,                  sizeof(TPacketGCNPCPosition),                false };
+	h[GC::CHANNEL]                = { &CPythonNetworkStream::RecvChannelPacket,            sizeof(TPacketGCChannel),                    false };
+	h[GC::VIEW_EQUIP]             = { &CPythonNetworkStream::RecvViewEquipPacket,          sizeof(TPacketGCViewEquip),                  false };
+	h[GC::LAND_LIST]              = { &CPythonNetworkStream::RecvLandPacket,               sizeof(TPacketGCLandList),                   false };
+
+	// Target
+	h[GC::TARGET_CREATE_NEW]      = { &CPythonNetworkStream::RecvTargetCreatePacketNew,    sizeof(TPacketGCTargetCreateNew),            false };
+	h[GC::TARGET_UPDATE]          = { &CPythonNetworkStream::RecvTargetUpdatePacket,       sizeof(TPacketGCTargetUpdate),               false };
+	h[GC::TARGET_DELETE]          = { &CPythonNetworkStream::RecvTargetDeletePacket,       sizeof(TPacketGCTargetDelete),               false };
+
+	// Affect
+	h[GC::AFFECT_ADD]             = { &CPythonNetworkStream::RecvAffectAddPacket,          sizeof(TPacketGCAffectAdd),                  false };
+	h[GC::AFFECT_REMOVE]          = { &CPythonNetworkStream::RecvAffectRemovePacket,       sizeof(TPacketGCAffectRemove),               false };
+
+	// Mall
+	h[GC::MALL_OPEN]              = { &CPythonNetworkStream::RecvMallOpenPacket,           sizeof(TPacketGCMallOpen),                   false };
+	h[GC::MALL_SET]               = { &CPythonNetworkStream::RecvMallItemSetPacket,        sizeof(TPacketGCItemSet),                    false };
+	h[GC::MALL_DEL]               = { &CPythonNetworkStream::RecvMallItemDelPacket,        sizeof(TPacketGCItemDel),                    false };
+
+	// Lover
+	h[GC::LOVER_INFO]             = { &CPythonNetworkStream::RecvLoverInfoPacket,          sizeof(TPacketGCLoverInfo),                  false };
+	h[GC::LOVE_POINT_UPDATE]      = { &CPythonNetworkStream::RecvLovePointUpdatePacket,    sizeof(TPacketGCLovePointUpdate),            false };
+
+	// Misc
+	h[GC::DIG_MOTION]             = { &CPythonNetworkStream::RecvDigMotionPacket,          sizeof(TPacketGCDigMotion),                  false };
+	h[GC::DRAGON_SOUL_REFINE]     = { &CPythonNetworkStream::RecvDragonSoulRefine,         sizeof(TPacketGCDragonSoulRefine),           false };
+}
+
+void CPythonNetworkStream::RegisterLoadingHandlers()
+{
+	// Loading phase: start with ALL game handlers as fallback (old code: default -> GamePhase())
+	m_loadingHandlers = m_gameHandlers;
+
+	// Override/add loading-specific handlers
+	m_loadingHandlers[GC::PHASE]                  = { &CPythonNetworkStream::RecvPhasePacket,           sizeof(TPacketGCPhase),                     true };
+	m_loadingHandlers[GC::MAIN_CHARACTER]         = { &CPythonNetworkStream::RecvMainCharacter,         sizeof(TPacketGCMainCharacter),             false };
+}
+
+// --- Packet sequence tracking ---
+
+void CPythonNetworkStream::LogRecvPacket(uint16_t header, uint16_t length)
+{
+	auto& e = m_aRecentRecvPackets[m_dwRecvPacketSeq % PACKET_LOG_SIZE];
+	e.seq = m_dwRecvPacketSeq;
+	e.header = header;
+	e.length = length;
+	m_dwRecvPacketSeq++;
+}
+
+void CPythonNetworkStream::DumpRecentPackets() const
+{
+	const uint32_t recvCount = std::min(m_dwRecvPacketSeq, (uint32_t)PACKET_LOG_SIZE);
+	const uint32_t sentCount = std::min(m_dwSentPacketSeq, (uint32_t)SENT_PACKET_LOG_SIZE);
+
+	TraceError("=== Recent RECV packets (last %u of %u total) ===", recvCount, m_dwRecvPacketSeq);
+
+	for (uint32_t i = 0; i < recvCount; i++)
+	{
+		uint32_t idx = (m_dwRecvPacketSeq > PACKET_LOG_SIZE)
+			? (m_dwRecvPacketSeq - PACKET_LOG_SIZE + i)
+			: i;
+		const auto& e = m_aRecentRecvPackets[idx % PACKET_LOG_SIZE];
+		TraceError("  RECV #%u: header=0x%04X len=%u", e.seq, e.header, e.length);
+	}
+
+	TraceError("=== Recent SENT packets (last %u of %u total) ===", sentCount, m_dwSentPacketSeq);
+
+	for (uint32_t i = 0; i < sentCount; i++)
+	{
+		uint32_t idx = (m_dwSentPacketSeq > SENT_PACKET_LOG_SIZE)
+			? (m_dwSentPacketSeq - SENT_PACKET_LOG_SIZE + i)
+			: i;
+		const auto& e = m_aSentPacketLog[idx % SENT_PACKET_LOG_SIZE];
+		TraceError("  SENT #%u: header=0x%04X len=%u", e.seq, e.header, e.length);
+	}
 }

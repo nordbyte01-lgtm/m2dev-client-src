@@ -283,16 +283,6 @@ PyObject* netSetTCPSendBufferSize(PyObject* poSelf, PyObject* poArgs)
 	return Py_BuildNone();
 }
 
-PyObject* netSetUDPRecvBufferSize(PyObject* poSelf, PyObject* poArgs)
-{
-	int bufSize;
-	if (!PyTuple_GetInteger(poArgs, 0, &bufSize))
-		return Py_BuildException();
-
-	//CPythonNetworkDatagram::Instance().SetRecvBufferSize(bufSize);
-	return Py_BuildNone();
-}
-
 PyObject* netSetMarkServer(PyObject* poSelf, PyObject* poArgs)
 {
 	char* szAddr;
@@ -320,19 +310,6 @@ PyObject* netConnectTCP(PyObject* poSelf, PyObject* poArgs)
 
 	CPythonNetworkStream& rkNetStream=CPythonNetworkStream::Instance();
 	rkNetStream.ConnectLoginServer(szAddr, port);
-	return Py_BuildNone();
-}
-
-PyObject* netConnectUDP(PyObject* poSelf, PyObject* poArgs)
-{
-	char * c_szIP;
-	if (!PyTuple_GetString(poArgs, 0, &c_szIP))
-		return Py_BuildException();
-	int iPort;
-	if (!PyTuple_GetInteger(poArgs, 1, &iPort))
-		return Py_BuildException();
-
-	//CPythonNetworkDatagram::Instance().SetConnection(c_szIP, iPort);
 	return Py_BuildNone();
 }
 
@@ -492,21 +469,6 @@ PyObject* netSendWhisperPacket(PyObject* poSelf, PyObject* poArgs)
 
 	CPythonNetworkStream& rkNetStream=CPythonNetworkStream::Instance();
 	rkNetStream.SendWhisperPacket(szName, szLine);
-	return Py_BuildNone();
-}
-
-PyObject* netSendMobileMessagePacket(PyObject* poSelf, PyObject* poArgs)
-{
-	char* szName;
-	char* szLine;
-	if (!PyTuple_GetString(poArgs, 0, &szName))
-		return Py_BuildException();
-
-	if (!PyTuple_GetString(poArgs, 1, &szLine))
-		return Py_BuildException();
-
-	CPythonNetworkStream& rkNetStream=CPythonNetworkStream::Instance();
-	rkNetStream.SendMobileMessagePacket(szName, szLine);
 	return Py_BuildNone();
 }
 
@@ -1565,16 +1527,6 @@ PyObject* netSendSelectItemPacket(PyObject* poSelf, PyObject* poArgs)
 	return Py_BuildNone();
 }
 
-PyObject* netSetPacketSequenceMode(PyObject* poSelf, PyObject* poArgs)
-{
-	CPythonNetworkStream& rns=CPythonNetworkStream::Instance();
-	CAccountConnector & rkAccountConnector = CAccountConnector::Instance();
-	rns.SetPacketSequenceMode(true);
-	rkAccountConnector.SetPacketSequenceMode(true);
-
-	return Py_BuildNone();
-}
-
 PyObject* netSetEmpireLanguageMode(PyObject* poSelf, PyObject* poArgs)
 {
 	int iMode;
@@ -1717,14 +1669,12 @@ void initnet()
 		{ "SetHandler",							netSetHandler,							METH_VARARGS },
 		{ "SetTCPRecvBufferSize",				netSetTCPRecvBufferSize,				METH_VARARGS },
 		{ "SetTCPSendBufferSize",				netSetTCPSendBufferSize,				METH_VARARGS },
-		{ "SetUDPRecvBufferSize",				netSetUDPRecvBufferSize,				METH_VARARGS },
 		{ "DirectEnter",						netDirectEnter,							METH_VARARGS },
 
 		{ "LogOutGame",							netLogOutGame,							METH_VARARGS },
 		{ "ExitGame",							netExitGame,							METH_VARARGS },
 		{ "ExitApplication",					netExitApplication,						METH_VARARGS },
 		{ "ConnectTCP",							netConnectTCP,							METH_VARARGS },
-		{ "ConnectUDP",							netConnectUDP,							METH_VARARGS },
 		{ "ConnectToAccountServer",				netConnectToAccountServer,				METH_VARARGS },
 
 		{ "SendLoginPacket",					netSendLoginPacket,						METH_VARARGS },
@@ -1752,7 +1702,6 @@ void initnet()
 		{ "SendChatPacket",						netSendChatPacket,						METH_VARARGS },
 		{ "SendEmoticon",						netSendEmoticon,						METH_VARARGS },
 		{ "SendWhisperPacket",					netSendWhisperPacket,					METH_VARARGS },
-		{ "SendMobileMessagePacket",			netSendMobileMessagePacket,				METH_VARARGS },
 
 		{ "SendCharacterPositionPacket",		netSendCharacterPositionPacket,			METH_VARARGS },
 
@@ -1824,7 +1773,6 @@ void initnet()
 		{ "SendSelectItemPacket",					netSendSelectItemPacket,					METH_VARARGS },
 
 		// SYSTEM
-		{ "SetPacketSequenceMode",					netSetPacketSequenceMode,					METH_VARARGS },
 		{ "SetEmpireLanguageMode",					netSetEmpireLanguageMode,					METH_VARARGS },
 
 		// For Test
@@ -1886,11 +1834,11 @@ void initnet()
 	PyModule_AddIntConstant(poModule, "EMPIRE_A", 1);
 	PyModule_AddIntConstant(poModule, "EMPIRE_B", 2);
 	PyModule_AddIntConstant(poModule, "EMPIRE_C", 3);
-	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_FAIL", DS_SUB_HEADER_REFINE_FAIL);
-	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_FAIL_MAX_REFINE", DS_SUB_HEADER_REFINE_FAIL_MAX_REFINE);
-	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_FAIL_INVALID_MATERIAL", DS_SUB_HEADER_REFINE_FAIL_INVALID_MATERIAL);
-	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_FAIL_NOT_ENOUGH_MONEY", DS_SUB_HEADER_REFINE_FAIL_NOT_ENOUGH_MONEY);
-	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_FAIL_NOT_ENOUGH_MATERIAL", DS_SUB_HEADER_REFINE_FAIL_NOT_ENOUGH_MATERIAL);
-	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_FAIL_TOO_MUCH_MATERIAL", DS_SUB_HEADER_REFINE_FAIL_TOO_MUCH_MATERIAL);
-	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_SUCCEED", DS_SUB_HEADER_REFINE_SUCCEED);
+	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_FAIL", DragonSoulSub::REFINE_FAIL);
+	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_FAIL_MAX_REFINE", DragonSoulSub::REFINE_FAIL_MAX_REFINE);
+	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_FAIL_INVALID_MATERIAL", DragonSoulSub::REFINE_FAIL_INVALID_MATERIAL);
+	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_FAIL_NOT_ENOUGH_MONEY", DragonSoulSub::REFINE_FAIL_NOT_ENOUGH_MONEY);
+	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_FAIL_NOT_ENOUGH_MATERIAL", DragonSoulSub::REFINE_FAIL_NOT_ENOUGH_MATERIAL);
+	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_FAIL_TOO_MUCH_MATERIAL", DragonSoulSub::REFINE_FAIL_TOO_MUCH_MATERIAL);
+	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_REFINE_SUCCEED", DragonSoulSub::REFINE_SUCCEED);
 }

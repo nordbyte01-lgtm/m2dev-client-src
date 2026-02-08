@@ -345,9 +345,8 @@ static struct TSyserrBuffer
         memcpy(buffer + pos, msg, len);
         pos += len;
 
-        DWORD now = ELTimer_GetMSec();
-        if (now - lastFlushMs > 500 || pos > BUFFER_SIZE * 3 / 4)
-            Flush();
+        // DEBUG: Force flush every write to capture crash traces
+        Flush();
     }
 
     void Flush()

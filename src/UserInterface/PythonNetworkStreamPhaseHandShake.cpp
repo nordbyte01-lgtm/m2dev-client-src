@@ -6,71 +6,7 @@
 // HandShake ---------------------------------------------------------------------------
 void CPythonNetworkStream::HandShakePhase()
 {
-	TPacketHeader header;
-
-	if (!CheckPacket(&header))
-		return;
-
-	switch (header)
-	{
-		case HEADER_GC_PHASE:
-			if (RecvPhasePacket())
-				return;
-			break;
-
-		case HEADER_GC_BINDUDP:
-			{
-				TPacketGCBindUDP BindUDP;
-
-				if (!Recv(sizeof(TPacketGCBindUDP), &BindUDP))
-					return;
-
-				return;
-			}
-			break;
-
-		case HEADER_GC_HANDSHAKE:
-			{
-				if (!Recv(sizeof(TPacketGCHandshake), &m_HandshakeData))
-					return;
-
-				Tracenf("HANDSHAKE RECV %u %d", m_HandshakeData.dwTime, m_HandshakeData.lDelta);
-
-				ELTimer_SetServerMSec(m_HandshakeData.dwTime+ m_HandshakeData.lDelta);
-
-				m_HandshakeData.dwTime = m_HandshakeData.dwTime + m_HandshakeData.lDelta + m_HandshakeData.lDelta;
-				m_HandshakeData.lDelta = 0;
-
-				Tracenf("HANDSHAKE SEND %u", m_HandshakeData.dwTime);
-
-				if (!Send(sizeof(TPacketGCHandshake), &m_HandshakeData))
-				{
-					assert(!"Failed Sending Handshake");
-					return;
-				}
-
-				CTimer::Instance().SetBaseTime();
-				return;
-			}
-			break;
-
-		case HEADER_GC_PING:
-			RecvPingPacket();
-			return;
-			break;
-
-		case HEADER_GC_KEY_CHALLENGE:
-			RecvKeyChallenge();
-			return;
-			break;
-
-		case HEADER_GC_KEY_COMPLETE:
-			RecvKeyComplete();
-			return;
-			break;
-	}
-
-	RecvErrorPacket(header);
+	DispatchPacket(m_handshakeHandlers);
 }
 
 void CPythonNetworkStream::SetHandShakePhase()
@@ -78,6 +14,7 @@ void CPythonNetworkStream::SetHandShakePhase()
 	if ("HandShake"!=m_strPhase)
 		m_phaseLeaveFunc.Run();
 
+	Tracef("[PHASE] Entering phase: HandShake\n");
 	Tracen("");
 	Tracen("## Network - Hand Shake Phase ##");
 	Tracen("");
@@ -99,114 +36,29 @@ void CPythonNetworkStream::SetHandShakePhase()
 	}
 }
 
-bool CPythonNetworkStream::RecvHandshakePacket()
-{
-	TPacketGCHandshake kHandshakeData;
-	if (!Recv(sizeof(TPacketGCHandshake), &kHandshakeData))
-		return false;
-
-	Tracenf("HANDSHAKE RECV %u %d", kHandshakeData.dwTime, kHandshakeData.lDelta);
-
-	m_kServerTimeSync.m_dwChangeServerTime = kHandshakeData.dwTime + kHandshakeData.lDelta;
-	m_kServerTimeSync.m_dwChangeClientTime = ELTimer_GetMSec();
-
-	kHandshakeData.dwTime = kHandshakeData.dwTime + kHandshakeData.lDelta + kHandshakeData.lDelta;
-	kHandshakeData.lDelta = 0;
-
-	Tracenf("HANDSHAKE SEND %u", kHandshakeData.dwTime);
-
-	kHandshakeData.header = HEADER_CG_TIME_SYNC;
-	if (!Send(sizeof(TPacketGCHandshake), &kHandshakeData))
-	{
-		assert(!"Failed Sending Handshake");
-		return false;
-	}
-
-	SendSequence();
-
-	return true;
-}
-
-bool CPythonNetworkStream::RecvHandshakeOKPacket()
-{
-	TPacketGCBlank kBlankPacket;
-	if (!Recv(sizeof(TPacketGCBlank), &kBlankPacket))
-		return false;
-
-	DWORD dwDelta=ELTimer_GetMSec()-m_kServerTimeSync.m_dwChangeClientTime;
-	ELTimer_SetServerMSec(m_kServerTimeSync.m_dwChangeServerTime+dwDelta);
-
-	Tracenf("HANDSHAKE OK RECV %u %u", m_kServerTimeSync.m_dwChangeServerTime, dwDelta);
-
-	return true;
-}
-
-// Secure key exchange handlers (libsodium/XChaCha20-Poly1305)
+// Override: extract time sync before delegating crypto to base class
 bool CPythonNetworkStream::RecvKeyChallenge()
 {
+	// Peek to extract server_time before base class Recv() consumes the packet
 	TPacketGCKeyChallenge packet;
-	if (!Recv(sizeof(packet), &packet))
-	{
+	if (!Peek(sizeof(packet), &packet))
 		return false;
-	}
 
-	Tracen("SECURE KEY_CHALLENGE RECV");
+	// Time sync from server (game connection only)
+	m_kServerTimeSync.m_dwChangeServerTime = packet.server_time;
+	m_kServerTimeSync.m_dwChangeClientTime = ELTimer_GetMSec();
+	ELTimer_SetServerMSec(packet.server_time);
+	CTimer::Instance().SetBaseTime();
 
-	SecureCipher& cipher = GetSecureCipher();
-	if (!cipher.Initialize())
-	{
-		TraceError("Failed to initialize SecureCipher");
-		Disconnect();
-		return false;
-	}
+	Tracef("[HANDSHAKE] KeyChallenge: server_time=%u, client_time=%u, offset=%d\n",
+		packet.server_time, ELTimer_GetMSec(), (int)(packet.server_time - ELTimer_GetMSec()));
 
-	if (!cipher.ComputeClientKeys(packet.server_pk))
-	{
-		TraceError("Failed to compute client session keys");
-		Disconnect();
-		return false;
-	}
-
-	TPacketCGKeyResponse response;
-	response.bHeader = HEADER_CG_KEY_RESPONSE;
-	cipher.GetPublicKey(response.client_pk);
-	cipher.ComputeChallengeResponse(packet.challenge, response.challenge_response);
-
-	if (!Send(sizeof(response), &response))
-	{
-		TraceError("Failed to send KeyResponse");
-		return false;
-	}
-
-	Tracen("SECURE KEY_RESPONSE SENT");
-	return true;
+	// Base class handles cipher init, key computation, and response
+	return CNetworkStream::RecvKeyChallenge();
 }
 
+// RecvKeyComplete: no game-specific additions, delegate entirely to base
 bool CPythonNetworkStream::RecvKeyComplete()
 {
-	TPacketGCKeyComplete packet;
-	if (!Recv(sizeof(packet), &packet))
-	{
-		return false;
-	}
-
-	Tracen("SECURE KEY_COMPLETE RECV");
-
-	SecureCipher& cipher = GetSecureCipher();
-
-	uint8_t decrypted_token[SecureCipher::SESSION_TOKEN_SIZE];
-	if (!cipher.DecryptToken(packet.encrypted_token, sizeof(packet.encrypted_token),
-	                          packet.nonce, decrypted_token))
-	{
-		TraceError("Failed to decrypt session token");
-		Disconnect();
-		return false;
-	}
-
-	cipher.SetSessionToken(decrypted_token);
-	cipher.SetActivated(true);
-	DecryptPendingRecvData();
-
-	Tracen("SECURE CIPHER ACTIVATED");
-	return true;
+	return CNetworkStream::RecvKeyComplete();
 }

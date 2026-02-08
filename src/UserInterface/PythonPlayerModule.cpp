@@ -1882,11 +1882,6 @@ PyObject * playerGetPKMode(PyObject* poSelf, PyObject* poArgs)
 	return Py_BuildValue("i", CPythonPlayer::Instance().GetPKMode());
 }
 
-PyObject * playerHasMobilePhoneNumber(PyObject* poSelf, PyObject* poArgs)
-{
-	return Py_BuildValue("i", CPythonPlayer::Instance().HasMobilePhoneNumber());
-}
-
 PyObject * playerSetWeaponAttackBonusFlag(PyObject* poSelf, PyObject* poArgs)
 {
 	int iFlag;
@@ -2138,11 +2133,11 @@ PyObject* playerSendDragonSoulRefine(PyObject* poSelf, PyObject* poArgs)
 		return Py_BuildException();
 	switch (bSubHeader)
 	{
-	case DS_SUB_HEADER_CLOSE:
+	case DragonSoulSub::CLOSE:
 		break;
-	case DS_SUB_HEADER_DO_UPGRADE:
-	case DS_SUB_HEADER_DO_IMPROVEMENT:
-	case DS_SUB_HEADER_DO_REFINE:
+	case DragonSoulSub::DO_UPGRADE:
+	case DragonSoulSub::DO_IMPROVEMENT:
+	case DragonSoulSub::DO_REFINE:
 		{
 			if (!PyTuple_GetObject(poArgs, 1, &pDic))
 				return Py_BuildException();
@@ -2316,9 +2311,6 @@ void initPlayer()
 
 		// PK Mode
 		{ "GetPKMode",					playerGetPKMode,					METH_VARARGS },
-
-		// Mobile
-		{ "HasMobilePhoneNumber",		playerHasMobilePhoneNumber,			METH_VARARGS },
 
 		// Emotion
 		{ "RegisterEmotionIcon",		playerRegisterEmotionIcon,			METH_VARARGS },
@@ -2568,9 +2560,9 @@ void initPlayer()
 	PyModule_AddIntConstant(poModule, "DRAGON_SOUL_EQUIPMENT_FIRST_SIZE",	c_DragonSoul_Equip_Slot_Max);
 
 	// 용혼석 개량창
-	PyModule_AddIntConstant(poModule, "DRAGON_SOUL_REFINE_CLOSE",	DS_SUB_HEADER_CLOSE);
-	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_DO_UPGRADE",	DS_SUB_HEADER_DO_UPGRADE);
-	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_DO_IMPROVEMENT",	DS_SUB_HEADER_DO_IMPROVEMENT);
-	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_DO_REFINE",	DS_SUB_HEADER_DO_REFINE);
+	PyModule_AddIntConstant(poModule, "DRAGON_SOUL_REFINE_CLOSE",	DragonSoulSub::CLOSE);
+	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_DO_UPGRADE",	DragonSoulSub::DO_UPGRADE);
+	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_DO_IMPROVEMENT",	DragonSoulSub::DO_IMPROVEMENT);
+	PyModule_AddIntConstant(poModule, "DS_SUB_HEADER_DO_REFINE",	DragonSoulSub::DO_REFINE);
 
 }

@@ -77,88 +77,8 @@ bool CPythonNetworkStream::LoadConvertTable(DWORD dwEmpireID, const char* c_szFi
 // Loading ---------------------------------------------------------------------------
 void CPythonNetworkStream::LoadingPhase()
 {
-	TPacketHeader header;
-
-	if (!CheckPacket(&header))
-		return;
-
-	switch (header)
-	{
-		case HEADER_GC_PHASE:
-			if (RecvPhasePacket())
-				return;
-			break;
-
-		case HEADER_GC_MAIN_CHARACTER:
-			if (RecvMainCharacter())
-				return;
-			break;
-
-		// SUPPORT_BGM
-		case HEADER_GC_MAIN_CHARACTER2_EMPIRE:
-			if (RecvMainCharacter2_EMPIRE())
-				return;
-			break;
-
-		case HEADER_GC_MAIN_CHARACTER3_BGM:
-			if (RecvMainCharacter3_BGM())
-				return;
-			break;
-
-		case HEADER_GC_MAIN_CHARACTER4_BGM_VOL:
-			if (RecvMainCharacter4_BGM_VOL())
-				return;
-			break;
-
-		// END_OF_SUPPORT_BGM
-
-		case HEADER_GC_CHARACTER_UPDATE:
-			if (RecvCharacterUpdatePacket())
-				return;
-			break;
-
-		case HEADER_GC_PLAYER_POINTS:
-			if (__RecvPlayerPoints())
-				return;
-			break;
-
-		case HEADER_GC_PLAYER_POINT_CHANGE:
-			if (RecvPointChange())
-				return;
-			break;
-
-		case HEADER_GC_ITEM_DEL:
-			if (RecvItemSetPacket())
-				return;
-			break;
-
-		case HEADER_GC_PING:
-			if (RecvPingPacket())
-				return;
-			break;
-
-		case HEADER_GC_QUICKSLOT_ADD:
-			if (RecvQuickSlotAddPacket())
-				return;
-			break;
-
-		case HEADER_GC_KEY_CHALLENGE:
-			RecvKeyChallenge();
-			return;
-			break;
-
-		case HEADER_GC_KEY_COMPLETE:
-			RecvKeyComplete();
-			return;
-			break;
-
-		default:
-			GamePhase();
-			return;
-			break;
-	}
-
-	RecvErrorPacket(header);
+	while (DispatchPacket(m_loadingHandlers))
+		;
 }
 
 void CPythonNetworkStream::SetLoadingPhase()
@@ -166,6 +86,7 @@ void CPythonNetworkStream::SetLoadingPhase()
 	if ("Loading"!=m_strPhase)
 		m_phaseLeaveFunc.Run();
 
+	Tracef("[PHASE] Entering phase: Loading\n");
 	Tracen("");
 	Tracen("## Network - Loading Phase ##");
 	Tracen("");
@@ -187,104 +108,30 @@ void CPythonNetworkStream::SetLoadingPhase()
 
 bool CPythonNetworkStream::RecvMainCharacter()
 {
-	TPacketGCMainCharacter MainChrPacket;
-	if (!Recv(sizeof(TPacketGCMainCharacter), &MainChrPacket))
+	TPacketGCMainCharacter pack;
+	if (!Recv(sizeof(pack), &pack))
 		return false;
 
-	m_dwMainActorVID = MainChrPacket.dwVID;
-	m_dwMainActorRace = MainChrPacket.wRaceNum;
-	m_dwMainActorEmpire = 0;
-	m_dwMainActorSkillGroup = MainChrPacket.bySkillGroup;
+	m_dwMainActorVID = pack.dwVID;
+	m_dwMainActorRace = pack.wRaceNum;
+	m_dwMainActorEmpire = pack.byEmpire;
+	m_dwMainActorSkillGroup = pack.bySkillGroup;
 
 	m_rokNetActorMgr->SetMainActorVID(m_dwMainActorVID);
 
-	CPythonPlayer& rkPlayer=CPythonPlayer::Instance();
-	rkPlayer.SetName(MainChrPacket.szName);
+	CPythonPlayer& rkPlayer = CPythonPlayer::Instance();
+	rkPlayer.SetName(pack.szName);
 	rkPlayer.SetMainCharacterIndex(GetMainActorVID());
 
-	PyCallClassMemberFunc(m_apoPhaseWnd[PHASE_WINDOW_LOAD], "LoadData", Py_BuildValue("(ii)", MainChrPacket.lX, MainChrPacket.lY));
+	if (pack.szBGMName[0] != '\0')
+	{
+		if (pack.fBGMVol > 0.0f)
+			__SetFieldMusicFileInfo(pack.szBGMName, pack.fBGMVol);
+		else
+			__SetFieldMusicFileName(pack.szBGMName);
+	}
 
-	//Tracef(" >> RecvMainCharacter\n");
-
-	SendClientVersionPacket();
-	return true;
-}
-
-// SUPPORT_BGM
-bool CPythonNetworkStream::RecvMainCharacter2_EMPIRE()
-{
-	TPacketGCMainCharacter2_EMPIRE mainChrPacket;
-	if (!Recv(sizeof(mainChrPacket), &mainChrPacket))
-		return false;
-
-	m_dwMainActorVID = mainChrPacket.dwVID;
-	m_dwMainActorRace = mainChrPacket.wRaceNum;
-	m_dwMainActorEmpire = mainChrPacket.byEmpire;
-	m_dwMainActorSkillGroup = mainChrPacket.bySkillGroup;
-
-	m_rokNetActorMgr->SetMainActorVID(m_dwMainActorVID);
-
-	CPythonPlayer& rkPlayer=CPythonPlayer::Instance();
-	rkPlayer.SetName(mainChrPacket.szName);
-	rkPlayer.SetMainCharacterIndex(GetMainActorVID());
-
-	PyCallClassMemberFunc(m_apoPhaseWnd[PHASE_WINDOW_LOAD], "LoadData", Py_BuildValue("(ii)", mainChrPacket.lX, mainChrPacket.lY));
-
-	//Tracef(" >> RecvMainCharacterNew : %d\n", m_dwMainActorEmpire);
-
-	SendClientVersionPacket();
-	return true;
-}
-
-bool CPythonNetworkStream::RecvMainCharacter3_BGM()
-{
-	TPacketGCMainCharacter3_BGM mainChrPacket;
-	if (!Recv(sizeof(mainChrPacket), &mainChrPacket))
-		return false;
-
-	m_dwMainActorVID = mainChrPacket.dwVID;
-	m_dwMainActorRace = mainChrPacket.wRaceNum;
-	m_dwMainActorEmpire = mainChrPacket.byEmpire;
-	m_dwMainActorSkillGroup = mainChrPacket.bySkillGroup;
-
-	m_rokNetActorMgr->SetMainActorVID(m_dwMainActorVID);
-
-	CPythonPlayer& rkPlayer=CPythonPlayer::Instance();
-	rkPlayer.SetName(mainChrPacket.szUserName);
-	rkPlayer.SetMainCharacterIndex(GetMainActorVID());
-
-	__SetFieldMusicFileName(mainChrPacket.szBGMName);
-
-	PyCallClassMemberFunc(m_apoPhaseWnd[PHASE_WINDOW_LOAD], "LoadData", Py_BuildValue("(ii)", mainChrPacket.lX, mainChrPacket.lY));
-
-	//Tracef(" >> RecvMainCharacterNew : %d\n", m_dwMainActorEmpire);
-
-	SendClientVersionPacket();
-	return true;
-}
-
-bool CPythonNetworkStream::RecvMainCharacter4_BGM_VOL()
-{
-	TPacketGCMainCharacter4_BGM_VOL mainChrPacket;
-	if (!Recv(sizeof(mainChrPacket), &mainChrPacket))
-		return false;
-
-	m_dwMainActorVID = mainChrPacket.dwVID;
-	m_dwMainActorRace = mainChrPacket.wRaceNum;
-	m_dwMainActorEmpire = mainChrPacket.byEmpire;
-	m_dwMainActorSkillGroup = mainChrPacket.bySkillGroup;
-
-	m_rokNetActorMgr->SetMainActorVID(m_dwMainActorVID);
-
-	CPythonPlayer& rkPlayer=CPythonPlayer::Instance();
-	rkPlayer.SetName(mainChrPacket.szUserName);
-	rkPlayer.SetMainCharacterIndex(GetMainActorVID());
-
-	__SetFieldMusicFileInfo(mainChrPacket.szBGMName, mainChrPacket.fBGMVol);
-
-	PyCallClassMemberFunc(m_apoPhaseWnd[PHASE_WINDOW_LOAD], "LoadData", Py_BuildValue("(ii)", mainChrPacket.lX, mainChrPacket.lY));
-
-	//Tracef(" >> RecvMainCharacterNew : %d\n", m_dwMainActorEmpire);
+	PyCallClassMemberFunc(m_apoPhaseWnd[PHASE_WINDOW_LOAD], "LoadData", Py_BuildValue("(ii)", pack.lX, pack.lY));
 
 	SendClientVersionPacket();
 	return true;
@@ -348,20 +195,15 @@ void CPythonNetworkStream::StartGame()
 {
 	m_isStartGame=TRUE;
 }
-	
+
 bool CPythonNetworkStream::SendEnterGame()
 {
 	TPacketCGEnterFrontGame EnterFrontGamePacket;
 
-	EnterFrontGamePacket.header = HEADER_CG_ENTERGAME;
+	EnterFrontGamePacket.header = CG::ENTERGAME;
+	EnterFrontGamePacket.length = sizeof(EnterFrontGamePacket);
 
 	if (!Send(sizeof(EnterFrontGamePacket), &EnterFrontGamePacket))
-	{
-		Tracen("Send EnterFrontGamePacket");
-		return false;
-	}
-
-	if (!SendSequence())
 		return false;
 
 	__SendInternalBuffer();
