@@ -147,9 +147,9 @@ void CGuildMarkDownloader::__LoginState_Set()
 
 bool CGuildMarkDownloader::__LoginState_Process()
 {
-	BYTE header;
+	uint16_t header;
 
-	if (!Peek(sizeof(BYTE), &header))
+	if (!Peek(sizeof(uint16_t), &header))
 		return true;
 
 	if (IsSecurityMode())
@@ -158,11 +158,11 @@ bool CGuildMarkDownloader::__LoginState_Process()
 		{
 			if (!Recv(sizeof(header), &header))
 				return false;
-			
+
 			return true;
 		}
 	}
-	
+
 	UINT needPacketSize = __GetPacketSize(header);
 
 	if (!needPacketSize)
@@ -180,23 +180,21 @@ UINT CGuildMarkDownloader::__GetPacketSize(UINT header)
 {
 	switch (header)
 	{
-		case HEADER_GC_PHASE:
+		case GC::PHASE:
 			return sizeof(TPacketGCPhase);
-		case HEADER_GC_HANDSHAKE:
-			return sizeof(TPacketGCHandshake);
-		case HEADER_GC_PING:
+		case GC::PING:
 			return sizeof(TPacketGCPing);
-		case HEADER_GC_MARK_IDXLIST:
+		case GC::MARK_IDXLIST:
 			return sizeof(TPacketGCMarkIDXList);
-		case HEADER_GC_MARK_BLOCK:
+		case GC::MARK_BLOCK:
 			return sizeof(TPacketGCMarkBlock);
-		case HEADER_GC_GUILD_SYMBOL_DATA:
+		case GC::SYMBOL_DATA:
 			return sizeof(TPacketGCGuildSymbolData);
-		case HEADER_GC_MARK_DIFF_DATA:
+		case GC::MARK_DIFF_DATA:
 			return sizeof(BYTE);
-		case HEADER_GC_KEY_CHALLENGE:
+		case GC::KEY_CHALLENGE:
 			return sizeof(TPacketGCKeyChallenge);
-		case HEADER_GC_KEY_COMPLETE:
+		case GC::KEY_COMPLETE:
 			return sizeof(TPacketGCKeyComplete);
 	}
 	return 0;
@@ -206,63 +204,28 @@ bool CGuildMarkDownloader::__DispatchPacket(UINT header)
 {
 	switch (header)
 	{
-		case HEADER_GC_PHASE:
+		case GC::PHASE:
 			return __LoginState_RecvPhase();
-		case HEADER_GC_HANDSHAKE:
-			return __LoginState_RecvHandshake();
-		case HEADER_GC_PING:
-			return __LoginState_RecvPing();
-		case HEADER_GC_MARK_IDXLIST:
+		case GC::PING:
+			return RecvPingPacket();
+		case GC::MARK_IDXLIST:
 			return __LoginState_RecvMarkIndex();
-		case HEADER_GC_MARK_BLOCK:
+		case GC::MARK_BLOCK:
 			return __LoginState_RecvMarkBlock();
-		case HEADER_GC_GUILD_SYMBOL_DATA:
+		case GC::SYMBOL_DATA:
 			return __LoginState_RecvSymbolData();
-		case HEADER_GC_MARK_DIFF_DATA:
+		case GC::MARK_DIFF_DATA:
 			return true;
-		case HEADER_GC_KEY_CHALLENGE:
-			return __LoginState_RecvKeyChallenge();
-		case HEADER_GC_KEY_COMPLETE:
-			return __LoginState_RecvKeyComplete();
+		case GC::KEY_CHALLENGE:
+			return RecvKeyChallenge();
+		case GC::KEY_COMPLETE:
+			return __LoginState_RecvKeyCompleteAndLogin();
 	}
 	return false;
 }
 // END_OF_MARK_BUG_FIX
 
-bool CGuildMarkDownloader::__LoginState_RecvHandshake()
-{
-	TPacketGCHandshake kPacketHandshake;
-	if (!Recv(sizeof(kPacketHandshake), &kPacketHandshake))
-		return false;
-
-	TPacketCGMarkLogin kPacketMarkLogin;
-
-	kPacketMarkLogin.header = HEADER_CG_MARK_LOGIN;
-	kPacketMarkLogin.handle = m_dwHandle;
-	kPacketMarkLogin.random_key = m_dwRandomKey;
-
-	if (!Send(sizeof(kPacketMarkLogin), &kPacketMarkLogin))
-		return false;
-
-	return true;
-}
-
-bool CGuildMarkDownloader::__LoginState_RecvPing()
-{
-	TPacketGCPing kPacketPing;
-
-	if (!Recv(sizeof(kPacketPing), &kPacketPing))
-		return false;
-
-	TPacketCGPong kPacketPong;
-	kPacketPong.bHeader = HEADER_CG_PONG;
-	kPacketPong.bSequence = GetNextSequence();
-
-	if (!Send(sizeof(TPacketCGPong), &kPacketPong))
-		return false;
-
-	return true;
-}
+// Ping/pong now handled by CNetworkStream::RecvPingPacket()
 
 bool CGuildMarkDownloader::__LoginState_RecvPhase()
 {
@@ -304,7 +267,8 @@ bool CGuildMarkDownloader::__LoginState_RecvPhase()
 bool CGuildMarkDownloader::__SendMarkIDXList()
 {
 	TPacketCGMarkIDXList kPacketMarkIDXList;
-	kPacketMarkIDXList.header = HEADER_CG_MARK_IDXLIST;
+	kPacketMarkIDXList.header = CG::MARK_IDXLIST;
+	kPacketMarkIDXList.length = sizeof(kPacketMarkIDXList);
 	if (!Send(sizeof(kPacketMarkIDXList), &kPacketMarkIDXList))
 		return false;
 
@@ -354,7 +318,8 @@ bool CGuildMarkDownloader::__SendMarkCRCList()
 	}
 	else
 	{
-		kPacketMarkCRCList.header = HEADER_CG_MARK_CRCLIST;
+		kPacketMarkCRCList.header = CG::MARK_CRCLIST;
+		kPacketMarkCRCList.length = sizeof(kPacketMarkCRCList);
 		kPacketMarkCRCList.imgIdx = m_currentRequestingImageIndex;
 		++m_currentRequestingImageIndex;
 
@@ -417,62 +382,24 @@ bool CGuildMarkDownloader::__LoginState_RecvMarkBlock()
 }
 // END_OF_MARK_BUG_FIX
 
-bool CGuildMarkDownloader::__LoginState_RecvKeyChallenge()
+// RecvKeyChallenge now handled by CNetworkStream::RecvKeyChallenge()
+
+// RecvKeyComplete + mark-specific login authentication
+bool CGuildMarkDownloader::__LoginState_RecvKeyCompleteAndLogin()
 {
-	TPacketGCKeyChallenge packet;
-	if (!Recv(sizeof(packet), &packet))
+	if (!CNetworkStream::RecvKeyComplete())
 		return false;
 
-	Tracen("KEY_CHALLENGE RECV");
+	// Send mark login (authentication) now that secure channel is established
+	TPacketCGMarkLogin kPacketMarkLogin;
+	kPacketMarkLogin.header = CG::MARK_LOGIN;
+	kPacketMarkLogin.length = sizeof(kPacketMarkLogin);
+	kPacketMarkLogin.handle = m_dwHandle;
+	kPacketMarkLogin.random_key = m_dwRandomKey;
 
-	SecureCipher& cipher = GetSecureCipher();
-	if (!cipher.Initialize())
-	{
-		Disconnect();
-		return false;
-	}
-
-	if (!cipher.ComputeClientKeys(packet.server_pk))
-	{
-		Disconnect();
-		return false;
-	}
-
-	TPacketCGKeyResponse response;
-	response.bHeader = HEADER_CG_KEY_RESPONSE;
-	cipher.GetPublicKey(response.client_pk);
-	cipher.ComputeResponse(packet.challenge, response.challenge_response);
-
-	if (!Send(sizeof(response), &response))
+	if (!Send(sizeof(kPacketMarkLogin), &kPacketMarkLogin))
 		return false;
 
-	Tracen("KEY_RESPONSE SENT");
-	return true;
-}
-
-bool CGuildMarkDownloader::__LoginState_RecvKeyComplete()
-{
-	TPacketGCKeyComplete packet;
-	if (!Recv(sizeof(packet), &packet))
-		return false;
-
-	Tracen("KEY_COMPLETE RECV");
-
-	SecureCipher& cipher = GetSecureCipher();
-
-	uint8_t session_token[SecureCipher::SESSION_TOKEN_SIZE];
-	if (!cipher.DecryptToken(packet.encrypted_token, sizeof(packet.encrypted_token),
-	                          packet.nonce, session_token))
-	{
-		Disconnect();
-		return false;
-	}
-
-	cipher.SetSessionToken(session_token);
-	cipher.SetActivated(true);
-	DecryptPendingRecvData();
-
-	Tracen("SECURE CIPHER ACTIVATED");
 	return true;
 }
 
@@ -481,7 +408,8 @@ bool CGuildMarkDownloader::__SendSymbolCRCList()
 	for (DWORD i=0; i<m_kVec_dwGuildID.size(); ++i)
 	{
 		TPacketCGSymbolCRC kSymbolCRCPacket;
-		kSymbolCRCPacket.header = HEADER_CG_GUILD_SYMBOL_CRC;
+		kSymbolCRCPacket.header = CG::SYMBOL_CRC;
+		kSymbolCRCPacket.length = sizeof(kSymbolCRCPacket);
 		kSymbolCRCPacket.dwGuildID = m_kVec_dwGuildID[i];
 
 		std::string strFileName = GetGuildSymbolFileName(m_kVec_dwGuildID[i]);
@@ -504,9 +432,9 @@ bool CGuildMarkDownloader::__LoginState_RecvSymbolData()
 		return true;
 
 #ifdef _DEBUG
-	printf("__LoginState_RecvSymbolData [%d/%d]\n", GetRecvBufferSize(), packet.size);
+	printf("__LoginState_RecvSymbolData [%d/%d]\n", GetRecvBufferSize(), packet.length);
 #endif
-	if (packet.size > GetRecvBufferSize())
+	if (packet.length > GetRecvBufferSize())
 		return true;
 
 	//////////////////////////////////////////////////////////////
@@ -515,7 +443,7 @@ bool CGuildMarkDownloader::__LoginState_RecvSymbolData()
 	if (!Recv(sizeof(kPacketSymbolData), &kPacketSymbolData))
 		return false;
 
-	WORD wDataSize = kPacketSymbolData.size - sizeof(kPacketSymbolData);
+	WORD wDataSize = kPacketSymbolData.length - sizeof(kPacketSymbolData);
 	DWORD dwGuildID = kPacketSymbolData.guild_id;
 	BYTE * pbyBuf = new BYTE [wDataSize];
 

@@ -94,7 +94,16 @@ void CBlockTexture::Render(int ix, int iy)
 		STATEMANAGER.SetTexture(0, m_lpd3dTexture);
 		STATEMANAGER.SetTexture(1, NULL);
 		STATEMANAGER.SetFVF(D3DFVF_XYZ|D3DFVF_TEX1|D3DFVF_DIFFUSE);
+
+		STATEMANAGER.SaveRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+		STATEMANAGER.SaveRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
+		STATEMANAGER.SaveRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+
 		STATEMANAGER.DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 4, 0, 2);
+
+		STATEMANAGER.RestoreRenderState(D3DRS_DESTBLEND);
+		STATEMANAGER.RestoreRenderState(D3DRS_SRCBLEND);
+		STATEMANAGER.RestoreRenderState(D3DRS_ALPHABLENDENABLE);
 	}
 }
 
@@ -137,14 +146,11 @@ void CBlockTexture::InvalidateRect(const RECT & c_rsrcRect)
 	DWORD * pdwDst = (DWORD *)lockedRect.pBits;
 	DWORD dwDstWidth = lockedRect.Pitch>>2;
 	DWORD dwSrcWidth = m_pDIB->GetWidth();
-	for (int i = 0; i < iclipHeight; ++i)
+	for (int y = 0; y < iclipHeight; ++y)
 	{
-		for (int i = 0; i < iclipWidth; ++i)
+		for (int x = 0; x < iclipWidth; ++x)
 		{
-			if (pdwSrc[i])
-				pdwDst[i] = pdwSrc[i] | 0xff000000;
-			else
-				pdwDst[i] = 0;
+			pdwDst[x] = pdwSrc[x];
 		}
 		pdwDst += dwDstWidth;
 		pdwSrc += dwSrcWidth;

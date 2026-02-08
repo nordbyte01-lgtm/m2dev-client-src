@@ -49,13 +49,10 @@ class CGuildMarkDownloader : public CNetworkStream, public CSingleton<CGuildMark
 		void __LoginState_Set();
 		bool __LoginState_Process();
 		bool __LoginState_RecvPhase();
-		bool __LoginState_RecvHandshake();
-		bool __LoginState_RecvPing();
 		bool __LoginState_RecvMarkIndex();
 		bool __LoginState_RecvMarkBlock();
 		bool __LoginState_RecvSymbolData();
-		bool __LoginState_RecvKeyChallenge();
-		bool __LoginState_RecvKeyComplete();
+		bool __LoginState_RecvKeyCompleteAndLogin();
 		bool __SendMarkIDXList();
 		bool __SendMarkCRCList();
 		bool __SendSymbolCRCList();

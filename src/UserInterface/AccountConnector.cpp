@@ -63,19 +63,16 @@ bool CAccountConnector::__StateProcess()
 
 bool CAccountConnector::__HandshakeState_Process()
 {
-	if (!__AnalyzePacket(HEADER_GC_PHASE, sizeof(TPacketGCPhase), &CAccountConnector::__AuthState_RecvPhase))
+	if (!__AnalyzePacket(GC::PHASE, sizeof(TPacketGCPhase), &CAccountConnector::__AuthState_RecvPhase))
 		return false;
 
-	if (!__AnalyzePacket(HEADER_GC_HANDSHAKE, sizeof(TPacketGCHandshake), &CAccountConnector::__AuthState_RecvHandshake))
+	if (!__AnalyzePacket(GC::PING, sizeof(TPacketGCPing), &CAccountConnector::__AuthState_RecvPingBase))
 		return false;
 
-	if (!__AnalyzePacket(HEADER_GC_PING, sizeof(TPacketGCPing), &CAccountConnector::__AuthState_RecvPing))
+	if (!__AnalyzePacket(GC::KEY_CHALLENGE, sizeof(TPacketGCKeyChallenge), &CAccountConnector::__AuthState_RecvKeyChallengeBase))
 		return false;
 
-	if (!__AnalyzePacket(HEADER_GC_KEY_CHALLENGE, sizeof(TPacketGCKeyChallenge), &CAccountConnector::__AuthState_RecvKeyChallenge))
-		return false;
-
-	if (!__AnalyzePacket(HEADER_GC_KEY_COMPLETE, sizeof(TPacketGCKeyComplete), &CAccountConnector::__AuthState_RecvKeyComplete))
+	if (!__AnalyzePacket(GC::KEY_COMPLETE, sizeof(TPacketGCKeyComplete), &CAccountConnector::__AuthState_RecvKeyCompleteBase))
 		return false;
 
 	return true;
@@ -86,25 +83,22 @@ bool CAccountConnector::__AuthState_Process()
 	if (!__AnalyzePacket(0, sizeof(BYTE), &CAccountConnector::__AuthState_RecvEmpty))
 		return true;
 
-	if (!__AnalyzePacket(HEADER_GC_PHASE, sizeof(TPacketGCPhase), &CAccountConnector::__AuthState_RecvPhase))
+	if (!__AnalyzePacket(GC::PHASE, sizeof(TPacketGCPhase), &CAccountConnector::__AuthState_RecvPhase))
 		return false;
 
-	if (!__AnalyzePacket(HEADER_GC_PING, sizeof(TPacketGCPing), &CAccountConnector::__AuthState_RecvPing))
+	if (!__AnalyzePacket(GC::PING, sizeof(TPacketGCPing), &CAccountConnector::__AuthState_RecvPingBase))
 		return false;
 
-	if (!__AnalyzePacket(HEADER_GC_AUTH_SUCCESS, sizeof(TPacketGCAuthSuccess), &CAccountConnector::__AuthState_RecvAuthSuccess))
+	if (!__AnalyzePacket(GC::AUTH_SUCCESS, sizeof(TPacketGCAuthSuccess), &CAccountConnector::__AuthState_RecvAuthSuccess))
 		return true;
 
-	if (!__AnalyzePacket(HEADER_GC_LOGIN_FAILURE, sizeof(TPacketGCAuthSuccess), &CAccountConnector::__AuthState_RecvAuthFailure))
+	if (!__AnalyzePacket(GC::LOGIN_FAILURE, sizeof(TPacketGCAuthSuccess), &CAccountConnector::__AuthState_RecvAuthFailure))
 		return true;
 
-	if (!__AnalyzePacket(HEADER_GC_HANDSHAKE, sizeof(TPacketGCHandshake), &CAccountConnector::__AuthState_RecvHandshake))
+	if (!__AnalyzePacket(GC::KEY_CHALLENGE, sizeof(TPacketGCKeyChallenge), &CAccountConnector::__AuthState_RecvKeyChallengeBase))
 		return false;
 
-	if (!__AnalyzePacket(HEADER_GC_KEY_CHALLENGE, sizeof(TPacketGCKeyChallenge), &CAccountConnector::__AuthState_RecvKeyChallenge))
-		return false;
-
-	if (!__AnalyzePacket(HEADER_GC_KEY_COMPLETE, sizeof(TPacketGCKeyComplete), &CAccountConnector::__AuthState_RecvKeyComplete))
+	if (!__AnalyzePacket(GC::KEY_COMPLETE, sizeof(TPacketGCKeyComplete), &CAccountConnector::__AuthState_RecvKeyCompleteBase))
 		return false;
 
 	return true;
@@ -130,7 +124,8 @@ bool CAccountConnector::__AuthState_RecvPhase()
 	else if (kPacketPhase.phase == PHASE_AUTH)
 	{
 		TPacketCGLogin3 LoginPacket;
-		LoginPacket.header = HEADER_CG_LOGIN3;
+		LoginPacket.header = CG::LOGIN3;
+		LoginPacket.length = sizeof(LoginPacket);
 
 		strncpy(LoginPacket.name, m_strID.c_str(), ID_MAX_NUM);
 		strncpy(LoginPacket.pwd, m_strPassword.c_str(), PASS_MAX_NUM);
@@ -149,133 +144,15 @@ bool CAccountConnector::__AuthState_RecvPhase()
 			return false;
 		}
 
-		if (!SendSequence())
-		{
-			return false;
-		}
-
 		__AuthState_Set();
 	}
 
 	return true;
 }
 
-bool CAccountConnector::__AuthState_RecvHandshake()
-{
-	TPacketGCHandshake kPacketHandshake;
-	if (!Recv(sizeof(kPacketHandshake), &kPacketHandshake))
-		return false;
-
-	Tracenf("HANDSHAKE RECV %u %d", kPacketHandshake.dwTime, kPacketHandshake.lDelta);
-
-	ELTimer_SetServerMSec(kPacketHandshake.dwTime+ kPacketHandshake.lDelta);
-
-	kPacketHandshake.dwTime = kPacketHandshake.dwTime + kPacketHandshake.lDelta + kPacketHandshake.lDelta;
-	kPacketHandshake.lDelta = 0;
-
-	Tracenf("HANDSHAKE SEND %u", kPacketHandshake.dwTime);
-
-	if (!Send(sizeof(kPacketHandshake), &kPacketHandshake))
-	{
-		Tracen(" CAccountConnector::__AuthState_RecvHandshake - SendHandshake Error");
-		return false;
-	}
-
-	return true;
-}
-
-bool CAccountConnector::__AuthState_RecvKeyChallenge()
-{
-	TPacketGCKeyChallenge packet;
-	if (!Recv(sizeof(packet), &packet))
-		return false;
-
-	Tracen("KEY_CHALLENGE RECV - Starting secure key exchange");
-
-	SecureCipher& cipher = GetSecureCipher();
-	if (!cipher.Initialize())
-	{
-		Tracen("SecureCipher initialization failed");
-		Disconnect();
-		return false;
-	}
-
-	if (!cipher.ComputeClientKeys(packet.server_pk))
-	{
-		Tracen("Failed to compute client session keys");
-		Disconnect();
-		return false;
-	}
-
-	TPacketCGKeyResponse response;
-	response.bHeader = HEADER_CG_KEY_RESPONSE;
-	cipher.GetPublicKey(response.client_pk);
-	cipher.ComputeResponse(packet.challenge, response.challenge_response);
-
-	if (!Send(sizeof(response), &response))
-	{
-		Tracen("Failed to send key response");
-		return false;
-	}
-
-	Tracen("KEY_RESPONSE SEND - Awaiting key completion");
-	return true;
-}
-
-bool CAccountConnector::__AuthState_RecvKeyComplete()
-{
-	TPacketGCKeyComplete packet;
-	if (!Recv(sizeof(packet), &packet))
-		return false;
-
-	Tracen("KEY_COMPLETE RECV - Decrypting session token");
-
-	SecureCipher& cipher = GetSecureCipher();
-
-	uint8_t session_token[SecureCipher::SESSION_TOKEN_SIZE];
-	if (crypto_aead_xchacha20poly1305_ietf_decrypt(
-			session_token, nullptr,
-			nullptr,
-			packet.encrypted_token, sizeof(packet.encrypted_token),
-			nullptr, 0,
-			packet.nonce,
-			cipher.GetRxKey()) != 0)
-	{
-		Tracen("Failed to decrypt session token - authentication failed");
-		Disconnect();
-		return false;
-	}
-
-	cipher.SetSessionToken(session_token);
-	cipher.SetActivated(true);
-	DecryptPendingRecvData();
-
-	Tracen("Secure channel established - encryption activated");
-	return true;
-}
-
-bool CAccountConnector::__AuthState_RecvPing()
-{
-	TPacketGCPing kPacketPing;
-	if (!Recv(sizeof(kPacketPing), &kPacketPing))
-		return false;
-
-	__AuthState_SendPong();
-
-	return true;
-}
-
-bool CAccountConnector::__AuthState_SendPong()
-{
-	TPacketCGPong kPacketPong;
-	kPacketPong.bHeader = HEADER_CG_PONG;
-	kPacketPong.bSequence = GetNextSequence();
-
-	if (!Send(sizeof(kPacketPong), &kPacketPong))
-		return false;
-
-	return true;
-}
+// Key exchange (RecvKeyChallenge, RecvKeyComplete) and ping/pong (RecvPingPacket)
+// are now handled by CNetworkStream base class. Thin wrappers in the header
+// delegate __AnalyzePacket dispatch to those base methods.
 
 bool CAccountConnector::__AuthState_RecvAuthSuccess()
 {
@@ -315,11 +192,11 @@ bool CAccountConnector::__AuthState_RecvAuthFailure()
 
 bool CAccountConnector::__AnalyzePacket(UINT uHeader, UINT uPacketSize, bool (CAccountConnector::*pfnDispatchPacket)())
 {
-	BYTE bHeader;
-	if (!Peek(sizeof(bHeader), &bHeader))
+	uint16_t wHeader;
+	if (!Peek(sizeof(wHeader), &wHeader))
 		return true;
 
-	if (bHeader!=uHeader)
+	if (wHeader != uHeader)
 		return true;
 
 	if (!Peek(uPacketSize))

@@ -9,7 +9,6 @@
 #else
 
 CGuildMarkUploader::CGuildMarkUploader()
- : m_pbySymbolBuf(NULL)
 {
 	SetRecvBufferSize(1024);
 	SetSendBufferSize(1024);
@@ -115,7 +114,7 @@ bool CGuildMarkUploader::__LoadSymbol(const char* c_szFileName, UINT* peError)
 
 	stbi_image_free(data);
 
-	// Now read raw file into m_pbySymbolBuf (same as original code did)
+	// Read raw file into m_symbolBuf
 	FILE* file = fopen(c_szFileName, "rb");
 	if (!file) {
 		*peError = ERROR_LOAD;
@@ -123,11 +122,11 @@ bool CGuildMarkUploader::__LoadSymbol(const char* c_szFileName, UINT* peError)
 	}
 
 	fseek(file, 0, SEEK_END);
-	m_dwSymbolBufSize = ftell(file);
+	long fileSize = ftell(file);
 	fseek(file, 0, SEEK_SET);
 
-	m_pbySymbolBuf = new uint8_t[m_dwSymbolBufSize];
-	fread(m_pbySymbolBuf, m_dwSymbolBufSize, 1, file);
+	m_symbolBuf.resize(static_cast<size_t>(fileSize));
+	fread(m_symbolBuf.data(), m_symbolBuf.size(), 1, file);
 	fclose(file);
 
 	m_dwSymbolCRC32 = GetFileCRC32(c_szFileName);
@@ -222,13 +221,7 @@ void CGuildMarkUploader::__Inialize()
 	m_dwHandle = 0;
 	m_dwRandomKey = 0;
 
-	if (m_pbySymbolBuf)
-	{
-		delete[] m_pbySymbolBuf;
-	}
-
-	m_dwSymbolBufSize = 0;
-	m_pbySymbolBuf = NULL;
+	m_symbolBuf.clear();
 }
 
 bool CGuildMarkUploader::__StateProcess()
@@ -263,19 +256,16 @@ void CGuildMarkUploader::__LoginState_Set()
 
 bool CGuildMarkUploader::__LoginState_Process()
 {
-	if (!__AnalyzePacket(HEADER_GC_PHASE, sizeof(TPacketGCPhase), &CGuildMarkUploader::__LoginState_RecvPhase))
+	if (!__AnalyzePacket(GC::PHASE, sizeof(TPacketGCPhase), &CGuildMarkUploader::__LoginState_RecvPhase))
 		return false;
 
-	if (!__AnalyzePacket(HEADER_GC_HANDSHAKE, sizeof(TPacketGCHandshake), &CGuildMarkUploader::__LoginState_RecvHandshake))
+	if (!__AnalyzePacket(GC::PING, sizeof(TPacketGCPing), &CGuildMarkUploader::__LoginState_RecvPingBase))
 		return false;
 
-	if (!__AnalyzePacket(HEADER_GC_PING, sizeof(TPacketGCPing), &CGuildMarkUploader::__LoginState_RecvPing))
+	if (!__AnalyzePacket(GC::KEY_CHALLENGE, sizeof(TPacketGCKeyChallenge), &CGuildMarkUploader::__LoginState_RecvKeyChallengeBase))
 		return false;
 
-	if (!__AnalyzePacket(HEADER_GC_KEY_CHALLENGE, sizeof(TPacketGCKeyChallenge), &CGuildMarkUploader::__LoginState_RecvKeyChallenge))
-		return false;
-
-	if (!__AnalyzePacket(HEADER_GC_KEY_COMPLETE, sizeof(TPacketGCKeyComplete), &CGuildMarkUploader::__LoginState_RecvKeyComplete))
+	if (!__AnalyzePacket(GC::KEY_COMPLETE, sizeof(TPacketGCKeyComplete), &CGuildMarkUploader::__LoginState_RecvKeyCompleteAndLogin))
 		return false;
 
 	return true;
@@ -284,7 +274,8 @@ bool CGuildMarkUploader::__LoginState_Process()
 bool CGuildMarkUploader::__SendMarkPacket()
 {
 	TPacketCGMarkUpload kPacketMarkUpload;
-	kPacketMarkUpload.header=HEADER_CG_MARK_UPLOAD;
+	kPacketMarkUpload.header=CG::MARK_UPLOAD;
+	kPacketMarkUpload.length = sizeof(kPacketMarkUpload);
 	kPacketMarkUpload.gid=m_dwGuildID;
 
 	assert(sizeof(kPacketMarkUpload.image) == sizeof(m_kMark.m_apxBuf));
@@ -297,21 +288,21 @@ bool CGuildMarkUploader::__SendMarkPacket()
 }
 bool CGuildMarkUploader::__SendSymbolPacket()
 {
-	if (!m_pbySymbolBuf)
+	if (m_symbolBuf.empty())
 		return false;
 
 	TPacketCGSymbolUpload kPacketSymbolUpload;
-	kPacketSymbolUpload.header=HEADER_CG_GUILD_SYMBOL_UPLOAD;
+	kPacketSymbolUpload.header=CG::GUILD_SYMBOL_UPLOAD;
 	kPacketSymbolUpload.handle=m_dwGuildID;
-	kPacketSymbolUpload.size=sizeof(TPacketCGSymbolUpload) + m_dwSymbolBufSize;
+	kPacketSymbolUpload.length=sizeof(TPacketCGSymbolUpload) + static_cast<uint16_t>(m_symbolBuf.size());
 
 	if (!Send(sizeof(TPacketCGSymbolUpload), &kPacketSymbolUpload))
 		return false;
-	if (!Send(m_dwSymbolBufSize, m_pbySymbolBuf))
+	if (!Send(static_cast<int>(m_symbolBuf.size()), m_symbolBuf.data()))
 		return false;
 
 #ifdef _DEBUG
-	printf("__SendSymbolPacket : [GuildID:%d/PacketSize:%d/BufSize:%d/CRC:%d]\n", m_dwGuildID, kPacketSymbolUpload.size, m_dwSymbolBufSize, m_dwSymbolCRC32);
+	printf("__SendSymbolPacket : [GuildID:%d/PacketSize:%d/BufSize:%d/CRC:%d]\n", m_dwGuildID, kPacketSymbolUpload.length, (int)m_symbolBuf.size(), m_dwSymbolCRC32);
 #endif
 
 	CNetworkStream::__SendInternalBuffer();
@@ -343,106 +334,35 @@ bool CGuildMarkUploader::__LoginState_RecvPhase()
 	return true;
 }
 
-bool CGuildMarkUploader::__LoginState_RecvHandshake()
+// Ping/pong and key challenge now handled by CNetworkStream base class.
+// Thin wrappers in the header delegate __AnalyzePacket dispatch to those base methods.
+
+// RecvKeyComplete + mark-specific login authentication
+bool CGuildMarkUploader::__LoginState_RecvKeyCompleteAndLogin()
 {
-	TPacketGCHandshake kPacketHandshake;
-	if (!Recv(sizeof(kPacketHandshake), &kPacketHandshake))
+	if (!CNetworkStream::RecvKeyComplete())
 		return false;
 
-	{
-		TPacketCGMarkLogin kPacketMarkLogin;
-		kPacketMarkLogin.header=HEADER_CG_MARK_LOGIN;
-		kPacketMarkLogin.handle=m_dwHandle;
-		kPacketMarkLogin.random_key=m_dwRandomKey;
-		if (!Send(sizeof(kPacketMarkLogin), &kPacketMarkLogin))
-			return false;
-	}
+	// Send mark login (authentication) now that secure channel is established
+	TPacketCGMarkLogin kPacketMarkLogin;
+	kPacketMarkLogin.header = CG::MARK_LOGIN;
+	kPacketMarkLogin.length = sizeof(kPacketMarkLogin);
+	kPacketMarkLogin.handle = m_dwHandle;
+	kPacketMarkLogin.random_key = m_dwRandomKey;
 
-	return true;
-}
-
-bool CGuildMarkUploader::__LoginState_RecvPing()
-{
-	TPacketGCPing kPacketPing;
-	if (!Recv(sizeof(kPacketPing), &kPacketPing))
+	if (!Send(sizeof(kPacketMarkLogin), &kPacketMarkLogin))
 		return false;
 
-	TPacketCGPong kPacketPong;
-	kPacketPong.bHeader = HEADER_CG_PONG;
-	kPacketPong.bSequence = GetNextSequence();
-
-	if (!Send(sizeof(TPacketCGPong), &kPacketPong))
-		return false;
-
-	return true;
-}
-
-bool CGuildMarkUploader::__LoginState_RecvKeyChallenge()
-{
-	TPacketGCKeyChallenge packet;
-	if (!Recv(sizeof(packet), &packet))
-		return false;
-
-	Tracen("KEY_CHALLENGE RECV");
-
-	SecureCipher& cipher = GetSecureCipher();
-	if (!cipher.Initialize())
-	{
-		Disconnect();
-		return false;
-	}
-
-	if (!cipher.ComputeClientKeys(packet.server_pk))
-	{
-		Disconnect();
-		return false;
-	}
-
-	TPacketCGKeyResponse response;
-	response.bHeader = HEADER_CG_KEY_RESPONSE;
-	cipher.GetPublicKey(response.client_pk);
-	cipher.ComputeResponse(packet.challenge, response.challenge_response);
-
-	if (!Send(sizeof(response), &response))
-		return false;
-
-	Tracen("KEY_RESPONSE SENT");
-	return true;
-}
-
-bool CGuildMarkUploader::__LoginState_RecvKeyComplete()
-{
-	TPacketGCKeyComplete packet;
-	if (!Recv(sizeof(packet), &packet))
-		return false;
-
-	Tracen("KEY_COMPLETE RECV");
-
-	SecureCipher& cipher = GetSecureCipher();
-
-	uint8_t session_token[SecureCipher::SESSION_TOKEN_SIZE];
-	if (!cipher.DecryptToken(packet.encrypted_token, sizeof(packet.encrypted_token),
-	                          packet.nonce, session_token))
-	{
-		Disconnect();
-		return false;
-	}
-
-	cipher.SetSessionToken(session_token);
-	cipher.SetActivated(true);
-	DecryptPendingRecvData();
-
-	Tracen("SECURE CIPHER ACTIVATED");
 	return true;
 }
 
 bool CGuildMarkUploader::__AnalyzePacket(UINT uHeader, UINT uPacketSize, bool (CGuildMarkUploader::*pfnDispatchPacket)())
 {
-	BYTE bHeader;
-	if (!Peek(sizeof(bHeader), &bHeader))
+	uint16_t wHeader;
+	if (!Peek(sizeof(wHeader), &wHeader))
 		return true;
 
-	if (bHeader!=uHeader)
+	if (wHeader != uHeader)
 		return true;
 
 	if (!Peek(uPacketSize))

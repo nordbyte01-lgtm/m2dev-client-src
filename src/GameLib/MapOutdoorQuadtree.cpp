@@ -47,27 +47,6 @@ CTerrainQuadtreeNode * CMapOutdoor::AllocQuadTreeNode(long x0, long y0, long x1,
 	
 	Node->PatchNum = y0 * m_wPatchCount + x0;
 
-/*
-	const float fTerrainMin = -(float) (m_lViewRadius * m_lCellScale);
-	
-	minx = fTerrainMin + x0 * c_byPatchSize * m_lCellScale;
-	maxx = fTerrainMin + (x1 + 1) * c_byPatchSize * m_lCellScale;
-	miny = fTerrainMin + y0 * c_byPatchSize * m_lCellScale;
-	maxy = fTerrainMin + (y1 + 1) * c_byPatchSize * m_lCellScale;
-	minz = 0.0f;
-	maxz = 0.0f;
-
-	/ * Set up 8 vertices that belong to the bounding box * /
-	Node->center.x = minx + (maxx - minx) * 0.5f;
-	Node->center.y = miny + (maxy - miny) * 0.5f;
-	Node->center.z = minz + (maxz - minz) * 0.5f;
-
-	Node->radius = sqrtf(
-		(maxx-minx)*(maxx-minx)+
-		(maxy-miny)*(maxy-miny)+
-		(maxz-minz)*(maxz-minz)
-		)/2.0f;
-*/
 
 	Node->center.x = 0.0f;
 	Node->center.y = 0.0f;
@@ -105,36 +84,6 @@ void CMapOutdoor::SubDivideNode(CTerrainQuadtreeNode * Node)
 		SubDivideNode (tempnode);
 }
 
-/*
-void CMapOutdoor::RecurseDeleteQuadTree(CTerrainQuadtreeNode *Node)
-{
-	if (Node == NULL)
-		return;
-	
-	if (Node->NW_Node != NULL)
-    {
-		RecurseDeleteQuadTree(Node->NW_Node);
-		Node->NW_Node = NULL;
-    }
-	if (Node->NE_Node != NULL)
-    {
-		RecurseDeleteQuadTree(Node->NE_Node);
-		Node->NE_Node = NULL;
-    }
-	if (Node->SW_Node != NULL)
-    {
-		RecurseDeleteQuadTree(Node->SW_Node);
-		Node->SW_Node = NULL;
-    }
-	if (Node->SE_Node != NULL)
-    {
-		RecurseDeleteQuadTree(Node->SE_Node);
-		Node->SE_Node = NULL;
-    }
-	
-	free(Node);
-}
-*/
 
 void CMapOutdoor::FreeQuadTree()
 {

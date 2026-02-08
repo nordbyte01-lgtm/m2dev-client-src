@@ -33,7 +33,7 @@ CGraphicText::TType CGraphicText::Type()
 
 bool CGraphicText::OnLoad(int /*iSize*/, const void* /*c_pvBuf*/)
 {
-	static char strName[32];
+	char strName[32];
 	int size;
 	bool bItalic = false;
 
@@ -45,10 +45,12 @@ bool CGraphicText::OnLoad(int /*iSize*/, const void* /*c_pvBuf*/)
 
 	if (p)
 	{
-		strncpy(strName, GetFileName(), MIN(31, p - GetFileName()));
+		int nameLen = MIN(31, (int)(p - GetFileName()));
+		strncpy(strName, GetFileName(), nameLen);
+		strName[nameLen] = '\0';
 		++p;
 
-		static char num[8];
+		char num[8];
 
 		int i = 0;
 		while (*p && isdigit(*p))
@@ -71,8 +73,12 @@ bool CGraphicText::OnLoad(int /*iSize*/, const void* /*c_pvBuf*/)
 			strName[0] = '\0';
 		}
 		else
-			strncpy(strName, GetFileName(), MIN(31, p - GetFileName()));
-		
+		{
+			int nameLen = MIN(31, (int)(p - GetFileName()));
+			strncpy(strName, GetFileName(), nameLen);
+			strName[nameLen] = '\0';
+		}
+
 		size = 12;
 	}
 

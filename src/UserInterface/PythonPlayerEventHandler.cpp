@@ -203,8 +203,8 @@ void CPythonPlayerEventHandler::FlushVictimList()
 	CPythonNetworkStream& rkStream=CPythonNetworkStream::Instance();
 
 	TPacketCGSyncPosition kPacketSyncPos;
-	kPacketSyncPos.bHeader=HEADER_CG_SYNC_POSITION;
-	kPacketSyncPos.wSize=sizeof(kPacketSyncPos)+sizeof(TPacketCGSyncPositionElement) * uiVictimCount;
+	kPacketSyncPos.header=CG::SYNC_POSITION;
+	kPacketSyncPos.length=sizeof(kPacketSyncPos)+sizeof(TPacketCGSyncPositionElement) * uiVictimCount;
 
 	rkStream.Send(sizeof(kPacketSyncPos), &kPacketSyncPos);
 
@@ -214,7 +214,6 @@ void CPythonPlayerEventHandler::FlushVictimList()
 		rkStream.SendSyncPositionElementPacket(rkVictim.m_dwVID, rkVictim.m_lPixelX, rkVictim.m_lPixelY);		
 	}
 
-	rkStream.SendSequence();
 	m_kVctkVictim.clear();
 }
 

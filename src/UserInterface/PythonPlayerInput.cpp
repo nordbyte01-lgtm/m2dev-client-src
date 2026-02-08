@@ -706,33 +706,6 @@ bool CPythonPlayer::__CanMove()
 
 	return true;
 }
-/*
-bool CPythonPlayer::__OLD_CanMove()
-{
-	if (__IsProcessingEmotion())
-	{
-		return false;
-	}
-
-	CInstanceBase* pkInstMain=NEW_GetMainActorPtr();
-	if (!pkInstMain)
-		return false;
-
-	if (pkInstMain->IsDead())
-		return false;
-
-	if (pkInstMain->IsStun())
-		return false;
-
-	if (pkInstMain->isLock())
-		return false;
-
-	if (pkInstMain->IsParalysis())
-		return false;
-
-	return true;
-}
-*/
 
 bool CPythonPlayer::__CanAttack()
 {
@@ -947,65 +920,3 @@ void CPythonPlayer::__ReserveProcess_ClickActor()
 	pkInstMain->NEW_AttackToDestInstanceDirection(*pkInstReserved);
 	__ClearReservedAction();
 }
-/*
-CInstanceBase* pkInstReserved=NEW_FindActorPtr(m_dwVIDReserved);
-if (pkInstReserved)
-{
-	if (pkInstMain->NEW_IsClickableDistanceDestInstance(*pkInstReserved))
-	{
-		if (pkInstMain->IsAttackableInstance(*pkInstReserved) )
-		{
-			if (!pkInstReserved->IsDead())
-			{
-				if (pkInstMain->IsInSafe())
-				{
-					PyCallClassMemberFunc(m_ppyGameWindow, "OnCannotAttack", Py_BuildValue("(is)", GetMainCharacterIndex(), "IN_SAFE"));
-					pkInstMain->NEW_Stop();
-				}
-				else if (pkInstReserved->IsInSafe())
-				{
-					PyCallClassMemberFunc(m_ppyGameWindow, "OnCannotAttack", Py_BuildValue("(is)", GetMainCharacterIndex(), "DEST_IN_SAFE"));
-					pkInstMain->NEW_Stop();
-				}
-				else
-				{
-					if (pkInstMain->IsBowMode())
-					{
-						if (!__HasEnoughArrow())
-						{
-							PyCallClassMemberFunc(m_ppyGameWindow, "OnCannotShot", Py_BuildValue("(is)", GetMainCharacterIndex(), "EMPTY_ARROW"));
-							pkInstMain->NEW_Stop();
-							__ClearReservedAction();
-							break;
-						}
-					}
-
-					if (pkInstReserved->GetVirtualID() != GetTargetVID())
-					{
-						SetTarget(pkInstReserved->GetVirtualID());
-					}
-
-					pkInstMain->NEW_AttackToDestInstanceDirection(*pkInstReserved);
-				}
-			}
-		}
-		else
-		{
-			__SendClickActorPacket(*pkInstReserved);
-
-			pkInstMain->NEW_Stop();
-		}
-
-		__ClearReservedAction();
-	}
-	else
-	{
-		//Tracen("ReservedMode: MOVE");
-		pkInstMain->NEW_MoveToDestInstanceDirection(*pkInstReserved);
-	}
-}
-else
-{
-	__ClearReservedAction();
-}
-*/

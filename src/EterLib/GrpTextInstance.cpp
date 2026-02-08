@@ -38,18 +38,23 @@ int CGraphicTextInstance::Hyperlink_GetText(char* buf, int len)
 	return (written > 0) ? written : 0;
 }
 
-int CGraphicTextInstance::__DrawCharacter(CGraphicFontTexture * pFontTexture, wchar_t text, DWORD dwColor)
+int CGraphicTextInstance::__DrawCharacter(CGraphicFontTexture * pFontTexture, wchar_t text, DWORD dwColor, wchar_t prevChar)
 {
 	CGraphicFontTexture::TCharacterInfomation* pInsCharInfo = pFontTexture->GetCharacterInfomation(text);
 
 	if (pInsCharInfo)
 	{
+		// Round kerning to nearest pixel to keep glyphs on the pixel grid.
+		// Fractional offsets cause bilinear interpolation blur in D3D9.
+		float kern = floorf(pFontTexture->GetKerning(prevChar, text) + 0.5f);
+
 		m_dwColorInfoVector.push_back(dwColor);
 		m_pCharInfoVector.push_back(pInsCharInfo);
+		m_kernVector.push_back(kern);
 
-		m_textWidth += pInsCharInfo->advance;
+		m_textWidth += (int)(pInsCharInfo->advance + kern);
 		m_textHeight = std::max((WORD)pInsCharInfo->height, m_textHeight);
-		return pInsCharInfo->advance;
+		return (int)(pInsCharInfo->advance + kern);
 	}
 
 	return 0;
@@ -99,6 +104,7 @@ void CGraphicTextInstance::Update()
 	auto ResetState = [&, spaceHeight]()
 		{
 			m_pCharInfoVector.clear();
+			m_kernVector.clear();
 			m_dwColorInfoVector.clear();
 			m_hyperlinkVector.clear();
 			m_textWidth = 0;
@@ -121,6 +127,7 @@ void CGraphicTextInstance::Update()
 	}
 
 	m_pCharInfoVector.clear();
+	m_kernVector.clear();
 	m_dwColorInfoVector.clear();
 	m_hyperlinkVector.clear();
 
@@ -154,8 +161,12 @@ void CGraphicTextInstance::Update()
 	// Secret mode: draw '*' instead of actual characters
 	if (m_isSecret)
 	{
+		wchar_t prevCh = 0;
 		for (int i = 0; i < wTextLen; ++i)
-			__DrawCharacter(pFontTexture, L'*', dwColor);
+		{
+			__DrawCharacter(pFontTexture, L'*', dwColor, prevCh);
+			prevCh = L'*';
+		}
 
 		pFontTexture->UpdateTexture();
 		m_isUpdate = true;
@@ -183,8 +194,12 @@ void CGraphicTextInstance::Update()
 				wMsg.data(), (int)wMsg.size(),
 				m_computedRTL);
 
+			wchar_t prevCh = 0;
 			for (size_t i = 0; i < visual.size(); ++i)
-				__DrawCharacter(pFontTexture, visual[i], dwColor);
+			{
+				__DrawCharacter(pFontTexture, visual[i], dwColor, prevCh);
+				prevCh = visual[i];
+			}
 
 			pFontTexture->UpdateTexture();
 			m_isUpdate = true;
@@ -245,8 +260,7 @@ void CGraphicTextInstance::Update()
 		int hyperlinkStep = 0; // 0=normal, 1=collecting metadata, 2=visible hyperlink
 		std::wstring hyperlinkMetadata;
 
-		// Use thread-local buffer to avoid per-call allocation
-		thread_local static std::vector<wchar_t> s_currentSegment;
+		static std::vector<wchar_t> s_currentSegment;
 		s_currentSegment.clear();
 
 		SHyperlink currentHyperlink;
@@ -267,10 +281,12 @@ void CGraphicTextInstance::Update()
 			std::vector<wchar_t> visual = BuildVisualBidiText_Tagless(
 				s_currentSegment.data(), (int)s_currentSegment.size(), forceRTLForBidi);
 
+			wchar_t prevCh = m_pCharInfoVector.empty() ? 0 : 0; // no prev across segments
 			for (size_t j = 0; j < visual.size(); ++j)
 			{
-				int w = __DrawCharacter(pFontTexture, visual[j], segColor);
+				int w = __DrawCharacter(pFontTexture, visual[j], segColor, prevCh);
 				totalWidth += w;
+				prevCh = visual[j];
 			}
 
 			s_currentSegment.clear();
@@ -285,13 +301,15 @@ void CGraphicTextInstance::Update()
 		{
 			outWidth = 0;
 
-			// Use thread-local buffers to avoid allocation
-			thread_local static std::vector<CGraphicFontTexture::TCharacterInfomation*> s_newCharInfos;
-			thread_local static std::vector<DWORD> s_newColors;
+			static std::vector<CGraphicFontTexture::TCharacterInfomation*> s_newCharInfos;
+			static std::vector<DWORD> s_newColors;
+			static std::vector<float> s_newKerns;
 			s_newCharInfos.clear();
 			s_newColors.clear();
+			s_newKerns.clear();
 			s_newCharInfos.reserve(chars.size());
 			s_newColors.reserve(chars.size());
+			s_newKerns.reserve(chars.size());
 
 			for (size_t k = 0; k < chars.size(); ++k)
 			{
@@ -301,16 +319,16 @@ void CGraphicTextInstance::Update()
 
 				s_newCharInfos.push_back(pInfo);
 				s_newColors.push_back(color);
+				s_newKerns.push_back(0.0f);
 
 				outWidth += pInfo->advance;
 				m_textHeight = std::max((WORD)pInfo->height, m_textHeight);
 			}
 
-			// Insert at the beginning of the draw list.
 			m_pCharInfoVector.insert(m_pCharInfoVector.begin(), s_newCharInfos.begin(), s_newCharInfos.end());
 			m_dwColorInfoVector.insert(m_dwColorInfoVector.begin(), s_newColors.begin(), s_newColors.end());
+			m_kernVector.insert(m_kernVector.begin(), s_newKerns.begin(), s_newKerns.end());
 
-			// Shift any already-recorded hyperlinks to the right.
 			for (auto& link : m_hyperlinkVector)
 			{
 				link.sx += outWidth;
@@ -366,7 +384,7 @@ void CGraphicTextInstance::Update()
 					if (!s_currentSegment.empty())
 					{
 						// OPTIMIZED: Use thread-local buffer for visible rendering
-						thread_local static std::vector<wchar_t> s_visibleToRender;
+						static std::vector<wchar_t> s_visibleToRender;
 						s_visibleToRender.clear();
 
 						// Find bracket positions: [ ... ]
@@ -385,7 +403,7 @@ void CGraphicTextInstance::Update()
 							s_visibleToRender.push_back(L'[');
 
 							// Extract inside content and apply BiDi
-							thread_local static std::vector<wchar_t> s_content;
+							static std::vector<wchar_t> s_content;
 							s_content.assign(
 								s_currentSegment.begin() + openBracket + 1,
 								s_currentSegment.begin() + closeBracket);
@@ -430,10 +448,12 @@ void CGraphicTextInstance::Update()
 						{
 							// LTR or non-chat: keep original "append" behavior
 							currentHyperlink.sx = currentHyperlink.ex;
+							wchar_t prevCh = 0;
 							for (size_t j = 0; j < s_visibleToRender.size(); ++j)
 							{
-								int w = __DrawCharacter(pFontTexture, s_visibleToRender[j], currentColor);
+								int w = __DrawCharacter(pFontTexture, s_visibleToRender[j], currentColor, prevCh);
 								currentHyperlink.ex += w;
+								prevCh = s_visibleToRender[j];
 							}
 							m_hyperlinkVector.push_back(currentHyperlink);
 						}
@@ -471,8 +491,14 @@ void CGraphicTextInstance::Update()
 
 	// Simple LTR rendering for plain text (no tags, no RTL)
 	// Just draw characters in logical order
-	for (int i = 0; i < wTextLen; ++i)
-		__DrawCharacter(pFontTexture, wTextBuf[i], dwColor);
+	{
+		wchar_t prevCh = 0;
+		for (int i = 0; i < wTextLen; ++i)
+		{
+			__DrawCharacter(pFontTexture, wTextBuf[i], dwColor, prevCh);
+			prevCh = wTextBuf[i];
+		}
+	}
 
 	pFontTexture->UpdateTexture();
 	m_isUpdate = true;
@@ -533,10 +559,10 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 			break;
 	}
 
-	static std::unordered_map<LPDIRECT3DTEXTURE9, std::vector<SVertex>> s_vtxBatches;
-	for (auto& [pTexture, vtxBatch] : s_vtxBatches) {
-		vtxBatch.clear();
-	}
+	static std::unordered_map<LPDIRECT3DTEXTURE9, std::vector<SVertex>> s_outlineBatches;
+	static std::unordered_map<LPDIRECT3DTEXTURE9, std::vector<SVertex>> s_mainBatches;
+	s_outlineBatches.clear();
+	s_mainBatches.clear();
 
 	STATEMANAGER.SaveRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
 	STATEMANAGER.SaveRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
@@ -552,6 +578,10 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 	STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAARG1,	D3DTA_TEXTURE);
 	STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAARG2,	D3DTA_DIFFUSE);
 	STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAOP,	D3DTOP_MODULATE);
+
+	// LCD subpixel rendering: mask alpha writes to prevent corruption during two-pass blending
+	STATEMANAGER.SaveRenderState(D3DRS_COLORWRITEENABLE,
+		D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE);
 
 	{
 		const float fFontHalfWeight=1.0f;
@@ -582,13 +612,18 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 			fCurY=fStanY;
 			fFontMaxHeight=0.0f;
 
+			int charIdx = 0;
 			CGraphicFontTexture::TPCharacterInfomationVector::iterator i;
-			for (i=m_pCharInfoVector.begin(); i!=m_pCharInfoVector.end(); ++i)
+			for (i=m_pCharInfoVector.begin(); i!=m_pCharInfoVector.end(); ++i, ++charIdx)
 			{
 				pCurCharInfo = *i;
 
+				float fKern = (charIdx < (int)m_kernVector.size()) ? m_kernVector[charIdx] : 0.0f;
+				fCurX += fKern;
+
 				fFontWidth=float(pCurCharInfo->width);
 				fFontHeight=float(pCurCharInfo->height);
+				fFontMaxHeight=(std::max)(fFontMaxHeight, fFontHeight);
 				fFontAdvance=float(pCurCharInfo->advance);
 
 				if ((fCurX+fFontWidth)-m_v3Position.x > m_fLimitWidth) [[unlikely]] {
@@ -612,13 +647,13 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 					}
 				}
 
-				fFontSx = fCurX - 0.5f;
+				fFontSx = fCurX + pCurCharInfo->bearingX - 0.5f;
 				fFontSy = fCurY - 0.5f;
 				fFontEx = fFontSx + fFontWidth;
 				fFontEy = fFontSy + fFontHeight;
 
 				pFontTexture->SelectTexture(pCurCharInfo->index);
-				std::vector<SVertex>& vtxBatch = s_vtxBatches[pFontTexture->GetD3DTexture()];
+				std::vector<SVertex>& vtxBatch = s_outlineBatches[pFontTexture->GetD3DTexture()];
 
 				akVertex[0].u=pCurCharInfo->left;
 				akVertex[0].v=pCurCharInfo->top;
@@ -644,7 +679,8 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 				akVertex[2].x=fFontEx-fFontHalfWeight+feather;
 				akVertex[3].x=fFontEx-fFontHalfWeight+feather;
 
-				vtxBatch.insert(vtxBatch.end(), std::begin(akVertex), std::end(akVertex));
+				vtxBatch.push_back(akVertex[0]); vtxBatch.push_back(akVertex[1]); vtxBatch.push_back(akVertex[2]);
+				vtxBatch.push_back(akVertex[2]); vtxBatch.push_back(akVertex[1]); vtxBatch.push_back(akVertex[3]);
 
 				// 오른
 				akVertex[0].x=fFontSx+fFontHalfWeight-feather;
@@ -652,7 +688,8 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 				akVertex[2].x=fFontEx+fFontHalfWeight+feather;
 				akVertex[3].x=fFontEx+fFontHalfWeight+feather;
 
-				vtxBatch.insert(vtxBatch.end(), std::begin(akVertex), std::end(akVertex));
+				vtxBatch.push_back(akVertex[0]); vtxBatch.push_back(akVertex[1]); vtxBatch.push_back(akVertex[2]);
+				vtxBatch.push_back(akVertex[2]); vtxBatch.push_back(akVertex[1]); vtxBatch.push_back(akVertex[3]);
 
 				akVertex[0].x=fFontSx-feather;
 				akVertex[1].x=fFontSx-feather;
@@ -665,7 +702,8 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 				akVertex[2].y=fFontSy-fFontHalfWeight-feather;
 				akVertex[3].y=fFontEy-fFontHalfWeight+feather;
 
-				vtxBatch.insert(vtxBatch.end(), std::begin(akVertex), std::end(akVertex));
+				vtxBatch.push_back(akVertex[0]); vtxBatch.push_back(akVertex[1]); vtxBatch.push_back(akVertex[2]);
+				vtxBatch.push_back(akVertex[2]); vtxBatch.push_back(akVertex[1]); vtxBatch.push_back(akVertex[3]);
 
 				// 아래
 				akVertex[0].y=fFontSy+fFontHalfWeight-feather;
@@ -673,7 +711,8 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 				akVertex[2].y=fFontSy+fFontHalfWeight-feather;
 				akVertex[3].y=fFontEy+fFontHalfWeight+feather;
 
-				vtxBatch.insert(vtxBatch.end(), std::begin(akVertex), std::end(akVertex));
+				vtxBatch.push_back(akVertex[0]); vtxBatch.push_back(akVertex[1]); vtxBatch.push_back(akVertex[2]);
+				vtxBatch.push_back(akVertex[2]); vtxBatch.push_back(akVertex[1]); vtxBatch.push_back(akVertex[3]);
 
 				fCurX += fFontAdvance;
 			}
@@ -683,13 +722,16 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 		fCurY=fStanY;
 		fFontMaxHeight=0.0f;
 
-		for (int i = 0; i < m_pCharInfoVector.size(); ++i)
+		for (int i = 0; i < (int)m_pCharInfoVector.size(); ++i)
 		{
 			pCurCharInfo = m_pCharInfoVector[i];
 
+			float fKern = (i < (int)m_kernVector.size()) ? m_kernVector[i] : 0.0f;
+			fCurX += fKern;
+
 			fFontWidth=float(pCurCharInfo->width);
 			fFontHeight=float(pCurCharInfo->height);
-			fFontMaxHeight=(std::max)(fFontHeight, (float)pCurCharInfo->height);
+			fFontMaxHeight=(std::max)(fFontMaxHeight, fFontHeight);
 			fFontAdvance=float(pCurCharInfo->advance);
 
 			if ((fCurX + fFontWidth) - m_v3Position.x > m_fLimitWidth) [[unlikely]] {
@@ -713,13 +755,13 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 				}
 			}
 
-			fFontSx = fCurX-0.5f;
+			fFontSx = fCurX + pCurCharInfo->bearingX - 0.5f;
 			fFontSy = fCurY-0.5f;
 			fFontEx = fFontSx + fFontWidth;
 			fFontEy = fFontSy + fFontHeight;
 
 			pFontTexture->SelectTexture(pCurCharInfo->index);
-			std::vector<SVertex>& vtxBatch = s_vtxBatches[pFontTexture->GetD3DTexture()];
+			std::vector<SVertex>& vtxBatch = s_mainBatches[pFontTexture->GetD3DTexture()];
 
 			akVertex[0].x=fFontSx;
 			akVertex[0].y=fFontSy;
@@ -743,7 +785,8 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 
 			akVertex[0].color = akVertex[1].color = akVertex[2].color = akVertex[3].color = m_dwColorInfoVector[i];
 
-			vtxBatch.insert(vtxBatch.end(), std::begin(akVertex), std::end(akVertex));
+			vtxBatch.push_back(akVertex[0]); vtxBatch.push_back(akVertex[1]); vtxBatch.push_back(akVertex[2]);
+			vtxBatch.push_back(akVertex[2]); vtxBatch.push_back(akVertex[1]); vtxBatch.push_back(akVertex[3]);
 
 			fCurX += fFontAdvance;
 		}
@@ -822,13 +865,46 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 		}
 	}
 
-	for (const auto& [pTexture, vtxBatch] : s_vtxBatches) {
-		if (vtxBatch.empty())
-			continue;
+	// LCD subpixel two-pass rendering: correct per-channel alpha blending
+	auto DrawBatchLCD = [](const std::unordered_map<LPDIRECT3DTEXTURE9, std::vector<SVertex>>& batches, bool skipPass2) {
+		for (const auto& [pTexture, vtxBatch] : batches) {
+			if (vtxBatch.empty())
+				continue;
 
-		STATEMANAGER.SetTexture(0, pTexture);
-		STATEMANAGER.DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, vtxBatch.size() - 2, vtxBatch.data(), sizeof(SVertex));
-	}
+			STATEMANAGER.SetTexture(0, pTexture);
+
+			// Pass 1: dest.rgb *= (1 - coverage.rgb)
+			STATEMANAGER.SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ZERO);
+			STATEMANAGER.SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCCOLOR);
+			STATEMANAGER.SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+			STATEMANAGER.SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+			STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+			STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+			STATEMANAGER.DrawPrimitiveUP(D3DPT_TRIANGLELIST,
+				vtxBatch.size() / 3, vtxBatch.data(), sizeof(SVertex));
+
+			if (!skipPass2) {
+				// Pass 2: dest.rgb += textColor.rgb * coverage.rgb
+				STATEMANAGER.SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
+				STATEMANAGER.SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
+				STATEMANAGER.SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+				STATEMANAGER.SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+				STATEMANAGER.SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
+				STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
+				STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+				STATEMANAGER.SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
+				STATEMANAGER.DrawPrimitiveUP(D3DPT_TRIANGLELIST,
+					vtxBatch.size() / 3, vtxBatch.data(), sizeof(SVertex));
+			}
+		}
+	};
+
+	// Draw outline batches first (skip Pass 2 for black outlines — MODULATE with black = 0)
+	bool outlineIsBlack = ((m_dwOutLineColor & 0x00FFFFFF) == 0);
+	DrawBatchLCD(s_outlineBatches, outlineIsBlack);
+
+	// Draw main text batches (always both passes)
+	DrawBatchLCD(s_mainBatches, false);
 
 	if (m_isCursor)
 	{
@@ -936,6 +1012,7 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 		}
 	}
 
+	STATEMANAGER.RestoreRenderState(D3DRS_COLORWRITEENABLE);
 	STATEMANAGER.RestoreRenderState(D3DRS_SRCBLEND);
 	STATEMANAGER.RestoreRenderState(D3DRS_DESTBLEND);
 
@@ -1264,6 +1341,7 @@ void CGraphicTextInstance::Destroy()
 {
 	m_stText="";
 	m_pCharInfoVector.clear();
+	m_kernVector.clear();
 	m_dwColorInfoVector.clear();
 	m_hyperlinkVector.clear();
 	m_logicalToVisualPos.clear();

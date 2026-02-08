@@ -8,10 +8,6 @@ void CPythonNetworkStream::SetSelectPhase()
 	if ("Select" != m_strPhase)
 		m_phaseLeaveFunc.Run();
 
-	Tracen("");
-	Tracen("## Network - Select Phase ##");
-	Tracen("");
-
 	m_strPhase = "Select";
 
 	m_dwChangingPhaseTime = ELTimer_GetMSec();
@@ -20,7 +16,7 @@ void CPythonNetworkStream::SetSelectPhase()
 
 	if (__DirectEnterMode_IsSet())
 	{
-		PyCallClassMemberFunc(m_poHandler, "SetLoadingPhase", Py_BuildValue("()"));	
+		PyCallClassMemberFunc(m_poHandler, "SetLoadingPhase", Py_BuildValue("()"));
 	}
 	else
 	{
@@ -33,99 +29,14 @@ void CPythonNetworkStream::SetSelectPhase()
 
 void CPythonNetworkStream::SelectPhase()
 {
-	TPacketHeader header;
-
-	if (!CheckPacket(&header))
-		return;
-
-	switch (header)
-	{
-		case HEADER_GC_PHASE:
-			if (RecvPhasePacket())
-				return;	
-			break;
-
-		case HEADER_GC_EMPIRE:
-			if (__RecvEmpirePacket())
-				return;
-			break;
-
-		case HEADER_GC_LOGIN_SUCCESS3:
-			if (__RecvLoginSuccessPacket3())
-				return;
-			break;
-
-		case HEADER_GC_LOGIN_SUCCESS4:
-			if (__RecvLoginSuccessPacket4())
-				return;
-			break;
-
-
-		case HEADER_GC_PLAYER_CREATE_SUCCESS:
-			if (__RecvPlayerCreateSuccessPacket())
-				return;
-			break;
-
-		case HEADER_GC_PLAYER_CREATE_FAILURE:
-			if (__RecvPlayerCreateFailurePacket())
-				return;
-			break;
-
-		case HEADER_GC_PLAYER_DELETE_WRONG_SOCIAL_ID:
-			if (__RecvPlayerDestroyFailurePacket())
-				return;
-			break;
-
-		case HEADER_GC_PLAYER_DELETE_SUCCESS:
-			if (__RecvPlayerDestroySuccessPacket())
-				return;
-			break;
-
-		case HEADER_GC_CHANGE_NAME:
-			if (__RecvChangeName())
-				return;
-			break;
-
-		case HEADER_GC_HANDSHAKE:
-			RecvHandshakePacket();
-			return;
-			break;
-
-		case HEADER_GC_HANDSHAKE_OK:
-			RecvHandshakeOKPacket();
-			return;
-			break;
-
-		case HEADER_GC_KEY_CHALLENGE:
-			RecvKeyChallenge();
-			return;
-			break;
-
-		case HEADER_GC_KEY_COMPLETE:
-			RecvKeyComplete();
-			return;
-			break;
-
-		case HEADER_GC_PLAYER_POINT_CHANGE:
-			TPacketGCPointChange PointChange;
-			Recv(sizeof(TPacketGCPointChange), &PointChange);
-			return;
-			break;
-
-		///////////////////////////////////////////////////////////////////////////////////////////
-		case HEADER_GC_PING:
-			if (RecvPingPacket())
-				return;
-			break;
-	}
-
-	RecvErrorPacket(header);
+	DispatchPacket(m_selectHandlers);
 }
 
 bool CPythonNetworkStream::SendSelectEmpirePacket(DWORD dwEmpireID)
 {
 	TPacketCGEmpire kPacketEmpire;
-	kPacketEmpire.bHeader=HEADER_CG_EMPIRE;
+	kPacketEmpire.header=CG::EMPIRE;
+	kPacketEmpire.length = sizeof(kPacketEmpire);
 	kPacketEmpire.bEmpire=dwEmpireID;
 
 	if (!Send(sizeof(kPacketEmpire), &kPacketEmpire))
@@ -135,14 +46,15 @@ bool CPythonNetworkStream::SendSelectEmpirePacket(DWORD dwEmpireID)
 	}
 
 	SetEmpireID(dwEmpireID);
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendSelectCharacterPacket(BYTE Index)
 {
 	TPacketCGSelectCharacter SelectCharacterPacket;
 
-	SelectCharacterPacket.header = HEADER_CG_PLAYER_SELECT;
+	SelectCharacterPacket.header = CG::CHARACTER_SELECT;
+	SelectCharacterPacket.length = sizeof(SelectCharacterPacket);
 	SelectCharacterPacket.player_index = Index;
 
 	if (!Send(sizeof(TPacketCGSelectCharacter), &SelectCharacterPacket))
@@ -151,14 +63,15 @@ bool CPythonNetworkStream::SendSelectCharacterPacket(BYTE Index)
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendDestroyCharacterPacket(BYTE index, const char * szPrivateCode)
 {
     TPacketCGDestroyCharacter DestroyCharacterPacket;
 
-	DestroyCharacterPacket.header = HEADER_CG_PLAYER_DESTROY;
+	DestroyCharacterPacket.header = CG::CHARACTER_DELETE;
+	DestroyCharacterPacket.length = sizeof(DestroyCharacterPacket);
 	DestroyCharacterPacket.index = index;
 	strncpy(DestroyCharacterPacket.szPrivateCode, szPrivateCode, PRIVATE_CODE_LENGTH-1);
 
@@ -168,14 +81,15 @@ bool CPythonNetworkStream::SendDestroyCharacterPacket(BYTE index, const char * s
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendCreateCharacterPacket(BYTE index, const char *name, BYTE job, BYTE shape, BYTE byCON, BYTE byINT, BYTE bySTR, BYTE byDEX)
 {
 	TPacketCGCreateCharacter createCharacterPacket;
 
-	createCharacterPacket.header = HEADER_CG_PLAYER_CREATE;
+	createCharacterPacket.header = CG::CHARACTER_CREATE;
+	createCharacterPacket.length = sizeof(createCharacterPacket);
 	createCharacterPacket.index = index;
 	strncpy(createCharacterPacket.name, name, CHARACTER_NAME_MAX_LEN);
 	createCharacterPacket.job = job;
@@ -191,13 +105,14 @@ bool CPythonNetworkStream::SendCreateCharacterPacket(BYTE index, const char *nam
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::SendChangeNamePacket(BYTE index, const char *name)
 {
 	TPacketCGChangeName ChangeNamePacket;
-	ChangeNamePacket.header = HEADER_CG_CHANGE_NAME;
+	ChangeNamePacket.header = CG::CHANGE_NAME;
+	ChangeNamePacket.length = sizeof(ChangeNamePacket);
 	ChangeNamePacket.index = index;
 	strncpy(ChangeNamePacket.name, name, CHARACTER_NAME_MAX_LEN);
 
@@ -207,7 +122,7 @@ bool CPythonNetworkStream::SendChangeNamePacket(BYTE index, const char *name)
 		return false;
 	}
 
-	return SendSequence();
+	return true;
 }
 
 bool CPythonNetworkStream::__RecvPlayerCreateSuccessPacket()

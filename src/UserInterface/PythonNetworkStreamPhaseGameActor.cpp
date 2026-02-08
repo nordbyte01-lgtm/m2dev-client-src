@@ -414,7 +414,7 @@ bool CPythonNetworkStream::RecvSyncPositionPacket()
 
 	TPacketGCSyncPositionElement kSyncPos;
 
-	UINT uSyncPosCount=(kPacketSyncPos.wSize-sizeof(kPacketSyncPos))/sizeof(kSyncPos);
+	UINT uSyncPosCount=(kPacketSyncPos.length-sizeof(kPacketSyncPos))/sizeof(kSyncPos);
 	for (UINT iSyncPos=0; iSyncPos<uSyncPosCount; ++iSyncPos)
 	{		
 		if (!Recv(sizeof(TPacketGCSyncPositionElement), &kSyncPos))

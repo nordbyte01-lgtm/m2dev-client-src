@@ -6,64 +6,7 @@
 // Login ---------------------------------------------------------------------------
 void CPythonNetworkStream::LoginPhase()
 {
-	TPacketHeader header;
-	if (!CheckPacket(&header))
-		return;
-
-	switch (header)
-	{
-		case HEADER_GC_PHASE:
-			if (RecvPhasePacket())
-				return;
-			break;
-
-		case HEADER_GC_LOGIN_SUCCESS3:
-			if (__RecvLoginSuccessPacket3())
-				return;
-			break;
-		case HEADER_GC_LOGIN_SUCCESS4:
-			if (__RecvLoginSuccessPacket4())
-				return;
-			break;
-
-
-		case HEADER_GC_LOGIN_FAILURE:
-			if (__RecvLoginFailurePacket())
-				return;		
-			break;
-
-		case HEADER_GC_EMPIRE:
-			if (__RecvEmpirePacket())
-				return;
-			break;
-
-		case HEADER_GC_LOGIN_KEY:
-			if (__RecvLoginKeyPacket())
-				return;
-			break;
-
-		case HEADER_GC_PING:
-			if (RecvPingPacket())
-				return;
-			break;
-
-		case HEADER_GC_KEY_CHALLENGE:
-			RecvKeyChallenge();
-			return;
-			break;
-
-		case HEADER_GC_KEY_COMPLETE:
-			RecvKeyComplete();
-			return;
-			break;
-
-		default:
-			if (RecvDefaultPacket(header))
-				return;
-			break;
-	}
-
-	RecvErrorPacket(header);
+	DispatchPacket(m_loginHandlers);
 }
 
 void CPythonNetworkStream::SetLoginPhase()
@@ -71,6 +14,7 @@ void CPythonNetworkStream::SetLoginPhase()
 	if ("Login" != m_strPhase)
 		m_phaseLeaveFunc.Run();
 
+	Tracef("[PHASE] Entering phase: Login\n");
 	Tracen("");
 	Tracen("## Network - Login Phase ##");
 	Tracen("");
@@ -84,7 +28,6 @@ void CPythonNetworkStream::SetLoginPhase()
 
 	if (0 == m_dwLoginKey)
 	{
-		TraceError("SetLoginPhase: no login key - cannot login without auth server");
 		ClearLoginInfo();
 		return;
 	}
@@ -166,10 +109,7 @@ bool CPythonNetworkStream::__RecvLoginSuccessPacket4()
 	m_kMarkAuth.m_dwHandle=kPacketLoginSuccess.handle;
 	m_kMarkAuth.m_dwRandomKey=kPacketLoginSuccess.random_key;
 
-	if (__DirectEnterMode_IsSet())
-	{
-	}
-	else
+	if (!__DirectEnterMode_IsSet())
 	{
 		PyCallClassMemberFunc(m_apoPhaseWnd[PHASE_WINDOW_SELECT], "Refresh", Py_BuildValue("()"));
 	}
@@ -205,19 +145,14 @@ bool CPythonNetworkStream::__RecvLoginFailurePacket()
 bool CPythonNetworkStream::SendLoginPacketNew(const char * c_szName, const char * c_szPassword)
 {
 	TPacketCGLogin2 LoginPacket;
-	LoginPacket.header = HEADER_CG_LOGIN2;
+	LoginPacket.header = CG::LOGIN2;
+	LoginPacket.length = sizeof(LoginPacket);
 	LoginPacket.login_key = m_dwLoginKey;
 
 	strncpy(LoginPacket.name, c_szName, sizeof(LoginPacket.name)-1);
 	LoginPacket.name[ID_MAX_NUM]='\0';
 
 	if (!Send(sizeof(LoginPacket), &LoginPacket))
-	{
-		Tracen("SendLogin Error");
-		return false;
-	}
-
-	if (!SendSequence())
 	{
 		Tracen("SendLogin Error");
 		return false;

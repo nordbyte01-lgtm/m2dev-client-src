@@ -57,8 +57,10 @@ void CServerStateChecker::Request()
 	m_kStream.SetSendBufferSize(1024);
 	m_kStream.SetRecvBufferSize(1024);
 
-	BYTE bHeader = HEADER_CG_STATE_CHECKER;
-	if (!m_kStream.Send(sizeof(bHeader), &bHeader))
+	TPacketGCBlank pack;
+	pack.header = CG::STATE_CHECKER;
+	pack.length = sizeof(pack);
+	if (!m_kStream.Send(sizeof(pack), &pack))
 	{
 		for (std::list<TChannel>::const_iterator it = m_lstChannel.begin(); it != m_lstChannel.end(); ++it) {
 			PyCallClassMemberFunc(m_poWnd, "NotifyChannelState", Py_BuildValue("(ii)", it->uServerIndex, 0));
@@ -72,13 +74,31 @@ void CServerStateChecker::Update()
 {
 	m_kStream.Process();
 
-	BYTE bHeader;
-	if (!m_kStream.Recv(sizeof(bHeader), &bHeader)) {
-		return;
+	// Skip packets until we find GC::RESPOND_CHANNELSTATUS.
+	// The server may send other packets first, which we need to discard.
+	while (true)
+	{
+		TDynamicSizePacketHeader packHeader;
+		if (!m_kStream.Peek(sizeof(packHeader), &packHeader))
+			return;
+
+		if (packHeader.header == GC::RESPOND_CHANNELSTATUS)
+		{
+			// Consume the header we peeked
+			m_kStream.Recv(sizeof(packHeader));
+			break;
+		}
+
+		// Not our packet — skip it using its length field
+		if (packHeader.length < sizeof(packHeader))
+			return;
+
+		if (!m_kStream.Peek(packHeader.length))
+			return; // Not enough data yet
+
+		m_kStream.Recv(packHeader.length);
 	}
-	if (HEADER_GC_RESPOND_CHANNELSTATUS != bHeader) {
-		return;
-	}
+
 	int nSize;
 	if (!m_kStream.Recv(sizeof(nSize), &nSize)) {
 		return;

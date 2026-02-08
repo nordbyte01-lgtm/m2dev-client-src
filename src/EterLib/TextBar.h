@@ -2,12 +2,15 @@
 
 #include "DibBar.h"
 
+#include <ft2build.h>
+#include FT_FREETYPE_H
+
 class CTextBar : public CDibBar
 {
 	public:
 		CTextBar(int fontSize, bool isBold);
 		virtual ~CTextBar();
-		
+
 		void TextOut(int ix, int iy, const char * c_szText);
 		void SetTextColor(int r, int g, int b);
 		void GetTextExtent(const char * c_szText, SIZE* p_size);
@@ -18,9 +21,12 @@ class CTextBar : public CDibBar
 		void OnCreate();
 
 	protected:
-		HFONT m_hFont;
-		HFONT m_hOldFont;
-		
+		FT_Face m_ftFace;
+		DWORD m_textColor;
+
 		int		m_fontSize;
 		bool	m_isBold;
+
+		int		m_ascender;
+		int		m_lineHeight;
 };

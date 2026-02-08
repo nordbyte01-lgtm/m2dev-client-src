@@ -90,7 +90,7 @@ class CGraphicTextInstance
 
 	protected:
 		void __Initialize();
-		int  __DrawCharacter(CGraphicFontTexture * pFontTexture, wchar_t text, DWORD dwColor);
+		int  __DrawCharacter(CGraphicFontTexture * pFontTexture, wchar_t text, DWORD dwColor, wchar_t prevChar = 0);
 		void __GetTextPos(DWORD index, float* x, float* y);
 
 	protected:
@@ -130,7 +130,6 @@ class CGraphicTextInstance
 
 	private:
 		bool m_isUpdate;
-		bool m_isUpdateFontTexture;
 		bool m_computedRTL;  // Result of BiDi analysis (used when m_direction == Auto)
 		bool m_isChatMessage;  // True if this text was set via SetChatValue (has separated name/message)
 		std::string m_chatName;  // Chat sender name (only used when m_isChatMessage is true)
@@ -138,6 +137,7 @@ class CGraphicTextInstance
 
 		CGraphicText::TRef m_roText;
 		CGraphicFontTexture::TPCharacterInfomationVector m_pCharInfoVector;
+		std::vector<float> m_kernVector;
 		std::vector<DWORD> m_dwColorInfoVector;
 		std::vector<SHyperlink> m_hyperlinkVector;
 		std::vector<int> m_logicalToVisualPos; // Maps logical cursor pos (UTF-16 with tags) to visual pos (rendered chars)
