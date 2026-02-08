@@ -508,6 +508,11 @@ class CInstanceBase
 		void					SetMoveSpeed(UINT uMovSpd);
 		void					SetRotationSpeed(float fRotSpd);
 
+		// celine skill fix
+		void					SetSkillTarget(DWORD dwVID);
+		void					ClearSkillTarget();
+		// END OF celine skill fix
+
 		const char *			GetNameString();
 		int						GetInstanceType();
 		DWORD					GetPart(CRaceData::EParts part);
@@ -963,6 +968,9 @@ class CInstanceBase
 		int						m_iRotatingDirection;
 
 		DWORD					m_dwAdvActorVID;
+		// celine skill fix
+		DWORD					m_dwSkillTargetVID;
+		// END OF celine skill fix
 		DWORD					m_dwLastDmgActorVID;
 
 		LONG					m_nAverageNetworkGap;

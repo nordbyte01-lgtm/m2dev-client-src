@@ -48,34 +48,43 @@ void CActorInstance::INSTANCEBASE_Transform()
 void CActorInstance::OnUpdate()
 {
 #ifdef __PERFORMANCE_CHECKER__
-	DWORD t1=ELTimer_GetMSec();
+	DWORD t1 = ELTimer_GetMSec();
 #endif
 	if (!IsParalysis())
 		CGraphicThingInstance::OnUpdate();
 #ifdef __PERFORMANCE_CHECKER__
-	DWORD t2=ELTimer_GetMSec();
+	DWORD t2 = ELTimer_GetMSec();
 #endif
 
 	UpdateAttachingInstances();
 
 #ifdef __PERFORMANCE_CHECKER__
-	DWORD t3=ELTimer_GetMSec();
+	DWORD t3 = ELTimer_GetMSec();
 #endif
+
+	// celine skill fix
+	if (__IsInSplashTime())
+		UpdateSplashArea();
+
+#ifdef __PERFORMANCE_CHECKER__
+	DWORD t4 = ELTimer_GetMSec();
+#endif
+	// END OF celine skill fix
 
 	__BlendAlpha_Update();
 
 #ifdef __PERFORMANCE_CHECKER__
-	DWORD t4=ELTimer_GetMSec();
+	DWORD t5 = ELTimer_GetMSec();
 	{
 		static FILE* fp=fopen("perf_actor_update2.txt", "w");
 
-		if (t4-t1>3)
+		if (t4 - t1 > 3)
 		{
 			fprintf(fp, "AIU2.Total %d (Time %f)\n", 
-				t4-t1, ELTimer_GetMSec()/1000.0f);
-			fprintf(fp, "AIU2.GU %d\n", t2-t1);
-			fprintf(fp, "AIU2.UAI %d\n", t3-t2);
-			fprintf(fp, "AIU2.BAU %d\n", t4-t3);
+				t4-t1, ELTimer_GetMSec() / 1000.0f);
+			fprintf(fp, "AIU2.GU %d\n", t2 - t1);
+			fprintf(fp, "AIU2.UAI %d\n", t3 - t2);
+			fprintf(fp, "AIU2.BAU %d\n", t4 - t3);
 			fprintf(fp, "-------------------------------- \n");
 			fflush(fp);
 		}
@@ -646,6 +655,36 @@ void CActorInstance::AdjustDynamicCollisionMovement(const CActorInstance * c_pAc
 	}
 }
 
+// celine skill fix
+void CActorInstance::UpdateSplashArea()
+{
+	const CRaceMotionData::TMotionAttackingEventData* c_pAttackingData = m_kSplashArea.c_pAttackingEvent;
+	if (!c_pAttackingData)
+		return;
+
+	if (m_kSplashArea.SphereInstanceVector.size() != c_pAttackingData->CollisionData.SphereDataVector.size())
+		return;
+
+	float fRadian = D3DXToRadian(270.0f + 360.0f - GetRotation());
+
+	for (DWORD i = 0; i < c_pAttackingData->CollisionData.SphereDataVector.size(); ++i)
+	{
+		const TSphereData& c_rSphereData = c_pAttackingData->CollisionData.SphereDataVector[i].GetAttribute();
+		CDynamicSphereInstance& rSphereInstance = m_kSplashArea.SphereInstanceVector[i];
+
+		rSphereInstance.v3Position.x =
+			m_x + c_rSphereData.v3Position.x * sinf(fRadian) +
+			c_rSphereData.v3Position.y * cosf(fRadian);
+
+		rSphereInstance.v3Position.y =
+			m_y + c_rSphereData.v3Position.x * cosf(fRadian) -
+			c_rSphereData.v3Position.y * sinf(fRadian);
+
+		rSphereInstance.v3Position.z =
+			m_z + c_rSphereData.v3Position.z;
+	}
+}
+// END OF celine skill fix
 
 void CActorInstance::__AdjustCollisionMovement(const CGraphicObjectInstance * c_pGraphicObjectInstance)
 {

@@ -1598,6 +1598,25 @@ enum EPointTypes
 
     POINT_RESIST_NORMAL_DAMAGE,		// 99
 
+	// MR-10: Added missing POINT_* values
+	POINT_HIT_HP_RECOVERY,		// 100
+	POINT_HIT_SP_RECOVERY, 		// 101
+	POINT_MANASHIELD,			// 102 흑신수호 스킬에 의한 마나쉴드 효과 정도
+
+	POINT_PARTY_BUFFER_BONUS,		// 103
+	POINT_PARTY_SKILL_MASTER_BONUS,	// 104
+
+	POINT_HP_RECOVER_CONTINUE,		// 105
+	POINT_SP_RECOVER_CONTINUE,		// 106
+
+	POINT_STEAL_GOLD,			// 107 
+	POINT_POLYMORPH,			// 108 변신한 몬스터 번호
+	POINT_MOUNT,			// 109 타고있는 몬스터 번호
+
+	POINT_PARTY_HASTE_BONUS,		// 110
+	POINT_PARTY_DEFENDER_BONUS,		// 111
+	// MR-10: -- END OF -- Added missing POINT_* values
+
 	POINT_STAT_RESET_COUNT = 112,
     POINT_HORSE_SKILL = 113,
 
@@ -1616,6 +1635,9 @@ enum EPointTypes
     POINT_NORMAL_HIT_DEFEND_BONUS,  // 124 평타 방어 데미지
     POINT_PC_BANG_EXP_BONUS,        // 125
 	POINT_PC_BANG_DROP_BONUS,       // 126 PC방 전용 드롭률 보너스
+	// MR-10: Added missing POINT_* values
+	POINT_RAMADAN_CANDY_BONUS_EXP,			// 라마단 사탕 경험치 증가용
+	// MR-10: -- END OF -- Added missing POINT_* values
 
 	POINT_ENERGY = 128,				// 128 기력
 
@@ -1625,6 +1647,20 @@ enum EPointTypes
 	// 더구나 클라리언트에서는 blend_affect는 관리하지 않아,
 	// 임시로 이렇게 둔다.
 	POINT_ENERGY_END_TIME = 129,	// 129 기력 종료 시간
+
+	// MR-10: Added missing POINT_* values
+	POINT_COSTUME_ATTR_BONUS = 130,
+	POINT_MAGIC_ATT_BONUS_PER = 131,
+	POINT_MELEE_MAGIC_ATT_BONUS_PER = 132,
+
+	// 추가 속성 저항
+	POINT_RESIST_ICE = 133,          //   냉기 저항   : 얼음공격에 대한 대미지 감소
+	POINT_RESIST_EARTH = 134,        //   대지 저항   : 얼음공격에 대한 대미지 감소
+	POINT_RESIST_DARK = 135,         //   어둠 저항   : 얼음공격에 대한 대미지 감소
+
+	POINT_RESIST_CRITICAL = 136,		// 크리티컬 저항	: 상대의 크리티컬 확률을 감소
+	POINT_RESIST_PENETRATE = 137,		// 관통타격 저항	: 상대의 관통타격 확률을 감소
+	// MR-10: -- END OF -- Added missing POINT_* values
 
 	// 클라이언트 포인트
 	POINT_MIN_WEP = 200,
