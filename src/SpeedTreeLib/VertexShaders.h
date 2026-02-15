@@ -287,7 +287,7 @@ static void LoadLeafShader(LPDIRECT3DDEVICE9 pDx, LPDIRECT3DVERTEXDECLARATION9& 
 		}
 	}
 	else {
-		TraceError("Failed to assemble leaf vertex shader. The error reported is [ %s ].", pError->GetBufferPointer());
+		TraceError("Failed to assemble leaf vertex shader. The error reported is [ %s ].", pError ? pError->GetBufferPointer() : "unknown");
 	}
 
 	if (FAILED(pDx->CreateVertexDeclaration(leafVertexDecl, &pVertexDecl))) {
