@@ -830,6 +830,7 @@ void CGraphicTextInstance::Render(RECT * pClipRect)
 			__GetTextPos(visualSelBegin, &sx, &sy);
 			__GetTextPos(visualSelEnd,   &ex, &sy);
 
+			// Handle RTL - use the computed direction for this text instance
 			// MR-15: Expose text highlighting to Python
 			// Apply horizontal alignment (must match text rendering offset)
 			float alignOffset = 0.0f;
